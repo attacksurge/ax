@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+AXIOM_PATH="$HOME/.axiom"
+source "$AXIOM_PATH/interact/includes/vars.sh"
+source "$AXIOM_PATH/interact/includes/functions.sh"
+provider="$(jq -r .provider "$AXIOM_PATH/axiom.json")"
+output="${Red}No instance supplied, use '\*' to delete all instances on the account"
+
+if [ -z "$1" ]
+then
+    if [ "$provider" != "linode" ] 
+    then
+        output="$output, use -f to force delete and avoid confirmation prompts${Color_Off}"
+    fi
+	echo -e "$output"
+    exit
+fi
+
+force="false"
+query=""
+droplets="$(instances)"
+selected=""
+
+for var in "$@"; do
+	if [ "$var" == "-f" ]; then
+		force=true
+	else
+		query="$query $var"
+	fi
+done
+
+selected=$(query_instances $query)
+
+if [[ "$selected" ]]
+then
+	for instance in $selected
+	do
+	    echo -e "${Red}Deleting '$instance'...${Color_Off}"
+		delete_instance "$instance" "$force"
+	done
+else    
+        >&2 echo -e "$output ${Color_Off}"
+	exit
+fi
+

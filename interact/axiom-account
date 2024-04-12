@@ -1,0 +1,201 @@
+#!/bin/bash
+
+AXIOM_PATH="$HOME/.axiom"
+source "$AXIOM_PATH/interact/includes/vars.sh"
+
+BASEOS="$(uname)"
+case $BASEOS in
+'Linux')
+    BASEOS='Linux'
+    ;;
+'FreeBSD')
+    BASEOS='FreeBSD'
+    alias ls='ls -G'
+    ;;
+'WindowsNT')
+    BASEOS='Windows'
+    ;;
+'Darwin')
+    BASEOS='Mac'
+    ;;
+'SunOS')
+    BASEOS='Solaris'
+    ;;
+'AIX') ;;
+*) ;;
+esac
+
+accounts=$(ls -A1 "$AXIOM_PATH/accounts/" | grep "json" | sed 's/\.json//g')
+if [ -f ~/.axiom/axiom.json ] ; then
+	current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)> /dev/null 2>&1
+fi
+
+function bootstrap() {
+    account_helpers=$(find "$AXIOM_PATH/interact/account-helpers" -name '*.sh' ! -name 'generate*' -execdir basename -s '.sh' {} +)
+    account_str=$(echo "$account_helpers" | sed 's/ /, /g')
+    provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
+    bash "$provider_path" 
+}
+
+if [ ! -z "$1" ]
+then
+    path="$AXIOM_PATH/accounts/$1.json"
+    if [[ -f "$path" ]]
+    then
+        echo -e "${BWhite}Selecting $1...${Color_Off}"
+        rm "$AXIOM_PATH/axiom.json" > /dev/null 2>&1
+        ln -s "$AXIOM_PATH/accounts/$1.json" "$AXIOM_PATH/axiom.json"
+        provider="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.provider')"
+        "$AXIOM_PATH"/interact/axiom-provider "$provider"
+
+        # Update doctl and check for valid token. If token isnt valid, kick off account bootstrap
+        if [[ "$provider" == "do" ]]; then
+            echo -e "${BGreen}Updating doctl...${Color_Off}"
+            if [[ $BASEOS == "Mac" ]]; then
+                brew install doctl
+                echo -e "${BGreen}Installing doctl packer plugin...${Color_Off}"
+                packer plugins install github.com/digitalocean/digitalocean
+            elif [[ $BASEOS == "Linux" ]]; then
+                OS=$(lsb_release -i | awk '{ print $3 }')
+                if ! command -v lsb_release &> /dev/null; then
+                    OS="unknown-Linux"
+                    BASEOS="Linux"
+                fi 
+                if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+                    sudo pacman -Syu doctl --noconfirm
+                else
+                 if ! command -v doctl &> /dev/null
+                 then
+                    wget -q -O /tmp/doctl.tar.gz https://github.com/digitalocean/doctl/releases/download/v1.66.0/doctl-1.66.0-linux-amd64.tar.gz && tar -xvzf /tmp/doctl.tar.gz && sudo mv doctl /usr/bin/doctl && rm /tmp/doctl.tar.gz
+                 fi
+                fi
+                token="$(jq -r '.do_key' "$AXIOM_PATH"/accounts/"$1".json)"
+                doctl auth init -t "$token" || bootstrap
+            fi #baseOS
+        fi #provider do
+
+        # Update Linode-cli and check for valid token. If token isnt valid, kick off account bootstrap
+        #
+        if [[ "$provider" == "linode" ]]; 
+        then
+            echo -e "${Green}Updating linode-cli\n ${Color_Off}"
+            pip3 install linode-cli --upgrade
+            if [[ $BASEOS == "Mac" ]]; then
+              echo -e "${BGreen}Installing linode packer plugin...${Color_Off}"
+              packer plugins install github.com/linode/linode
+            fi
+            token="$(jq -r '.linode_key' "$AXIOM_PATH"/accounts/"$1".json)"
+            size="$(jq -r '.default_size' "$AXIOM_PATH"/accounts/"$1".json)"
+            region="$(jq -r '.region' "$AXIOM_PATH"/accounts/"$1".json)"
+            mkdir -p "$HOME/.config"
+            echo -e "[DEFAULT]\ndefault-user = axiom\n\n[axiom]\ntoken = $token\nregion = $region\ntype = $size\nimage = linode/alpine3.10" > "$HOME/.config/linode-cli"
+            unauthed=$(curl -s -H "Authorization: Bearer $token" https://api.linode.com/v4/account | grep Invalid  | wc -l | tr -d ' ')
+            if [[ "$unauthed" == "1" ]]; then
+                echo -e "Not authenticated to linode-cli"
+            bootstrap
+            fi
+        fi #provider linode
+
+        # If IBM token isnt valid, kick off account bootstrap
+        #
+        if [[ "$provider" == "ibm" ]]; then
+         if [[ $BASEOS == "Linux" ]]; then
+          if $(uname -a | grep -qi "Microsoft"); then
+           OS="UbuntuWSL"
+          else
+           OS=$(lsb_release -i | awk '{ print $3 }')
+           if ! command -v lsb_release &> /dev/null; then
+            OS="unknown-Linux"
+            BASEOS="Linux"
+           fi
+          fi
+         if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+          echo "Needs Conversation"
+         elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]]; then
+          if ! [ -x "$(command -v ibmcloud)" ]; then
+           echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
+           curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+           echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
+           ibmcloud plugin install sl -q -f
+          fi
+         elif [[ $OS == "Fedora" ]]; then
+          echo "Needs Conversation"
+	       elif [ $OS == "UbuntuWSL" ]; then
+          if ! [ -x "$(command -v ibmcloud)" ]; then
+           echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
+           curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+           echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
+           ibmcloud plugin install sl -q -f
+          fi
+          fi
+         fi
+
+         if [[ $BASEOS == "Mac" ]]; then
+          whereis brew
+          if [ ! $? -eq 0 ] || [[ ! -z ${AXIOM_FORCEBREW+x} ]]; then
+           echo -e "${BGreen}Installing brew...${Color_Off}"
+           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          else
+           echo -e "${BGreen}Checking for brew... already installed, skipping installation.${Color_Off}"
+           echo -e "${BGreen}    Note: You can force brew installation by running${Color_Off}"
+           echo -e '    $ AXIOM_FORCEBREW=yes $HOME/.axiom/interact/axiom-configure'
+          fi
+         if ! [ -x "$(command -v ibmcloud)" ]; then
+          echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
+          curl -fsSL https://clis.cloud.ibm.com/install/osx | sh
+          echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
+          ibmcloud plugin install sl -q -f
+         fi
+         fi
+
+         #############################################################################################################
+         # Change packer version for IBM
+         #
+         mkdir -p /tmp/packer-ibm/
+         if [[ ! -f /tmp/packer-ibm/packer ]]; then
+          if [[ $BASEOS == "Linux" ]]; then
+           wget -q -O /tmp/packer.zip https://releases.hashicorp.com/packer/1.5.6/packer_1.5.6_linux_amd64.zip && cd /tmp/ && unzip packer.zip && mv packer /tmp/packer-ibm/ && rm /tmp/packer.zip
+          elif [[ $BASEOS == "Darwin" ]]; then
+           wget -q -O /tmp/packer.zip https://releases.hashicorp.com/packer/1.5.6/packer_1.5.6_darwin_amd64.zip && cd /tmp/ && unzip packer.zip && mv packer /tmp/packer-ibm/ && rm /tmp/packer.zip 
+          fi
+        fi
+        # packer check
+         if [[ ! -f "$HOME/.packer.d/plugins/packer-builder-ibmcloud" ]]; then
+          echo -n -e "${BGreen}Installing IBM Cloud Packer Builder (https://github.com/IBM/packer-plugin-ibmcloud/):\n y/n >> ${Color_Off}"
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          mkdir -p ~/.packer.d/plugins/
+          wget https://github.com/IBM/packer-plugin-ibmcloud/releases/download/v1.0.1/packer-builder-ibmcloud_1.0.1_linux_64-bit.tar.gz -O - | tar -xz -C ~/.packer.d/plugins/
+         fi
+         ibmcloud update -f
+         token="$(jq -r '.ibm_cloud_api_key' "$AXIOM_PATH"/accounts/"$1".json)"
+         ibmcloud login --apikey "$token" --no-region || bootstrap
+        fi #end provider ibm
+
+        # If Azure cli isnt logged in, kick off bootstrap
+        # TODO: Make sure az is up to date
+        # TODO: This likely doesnt play well with multiple account accounts
+        # TODO: grep account creds from account.json and authenticate with those 
+        #
+        if [[ "$provider" == "azure" ]]; 
+            then    
+            az ad signed-in-user show || bootstrap
+        fi
+
+    echo -e "${Green}Selected $1 successfully${Color_Off}"
+    else
+        echo -e "${Red}Account name not present${Color_Off}"
+    fi #if path
+else
+    echo -e "${BWhite}Available Accounts${Color_Off}"
+    echo -n -e "${BGreen}"
+    for account in $accounts
+        do
+            if [[ $account == $current ]]
+            then
+                echo "* $account"
+            else
+                echo "  $account"
+            fi
+        done
+    echo -n -e "${Color_Off}"
+fi #main if

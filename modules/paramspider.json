@@ -1,0 +1,5 @@
+[{
+  "command":"docker run -t --rm -i --mount type=bind,source=\"$(pwd)\",target=/data axiom/paramspider -d _target_ -s | tee output/_cleantarget_",
+  "ext":"",
+  "threads":"1"
+}]

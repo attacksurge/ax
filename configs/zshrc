@@ -1,0 +1,23 @@
+export TERM="xterm-256color"
+export ZSH=/home/op/.oh-my-zsh
+export EDITOR='vim'
+export GOPATH=/home/op/go
+export HOME=/home/op
+export PATH="$PATH:$HOME/.rvm/bin:/home/op/go/bin:/home/op/bin:/home/op/.local/bin:/usr/local/go/bin" 
+
+source $ZSH/oh-my-zsh.sh
+source ~/.profile
+source $HOME/bin/tmux-splash.sh
+
+alias ls=" ls --color -sh"
+alias wclone="wget -H -p -k"
+alias nmap="grc nmap"
+alias netstat="grc netstat"
+alias ping="grc ping"
+alias tail="grc tail"
+alias ps="grc ps"
+
+zstyle ':omz:update' mode auto
+ZSH_THEME="mrtazz"
+
+stty sane

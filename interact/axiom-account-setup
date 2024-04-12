@@ -1,0 +1,21 @@
+#!/bin/bash
+
+AXIOM_PATH="$HOME/.axiom"
+source "$AXIOM_PATH/interact/includes/vars.sh"
+
+echo -e "${BWhite}Axiom Account Setup${Color_Off}"
+echo -e "${BGreen}You can use this wizard to add new accounts, once made, use axiom-account to switch between profiles${Color_Off}"
+account_helpers=$(find "$AXIOM_PATH/interact/account-helpers" -name "*.sh" ! -name '*gcp*' ! -name "generate*" -execdir basename -s '.sh' {} +)
+account_str=$(echo $account_helpers | sed 's/ /, /g')
+echo -e -n "${Green}Please enter your provider ($account_str): \n>> ${Color_Off}"
+read provider
+provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
+
+while [[ ! -f "$provider_path" ]]; 
+do
+	echo -e -n "${Green}This is not a valid provider, please enter your a valid provider ($account_str): \n>> ${Color_Off}"
+	read provider
+	provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
+done
+
+bash "$provider_path"

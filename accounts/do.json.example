@@ -1,0 +1,10 @@
+{
+  "do_key": "<required api key>",
+  "region": "nyc1",
+  "provider": "do",
+  "default_size": "s-1vcpu-1gb",
+  "sshkey": "axiom_rsa",
+  "op": "<redacted>",
+  "imageid": "axiom-default-<timestamp>",
+  "provisioner": "default"
+}
