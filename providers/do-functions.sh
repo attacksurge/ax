@@ -6,15 +6,6 @@ LOG="$AXIOM_PATH/log.txt"
 ###################################################################
 #  Create many instance at a time
 #
-#  check if instances are ready, wait a maximum of three minutes
-# Main function to check instances' readiness
-instances_ready() {
-# TODO
-}
-
-###################################################################
-#  Create many instance at a time
-#
 #  needed for axiom-fleet
 create_instances() {
 	start="$1"
