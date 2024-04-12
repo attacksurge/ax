@@ -362,8 +362,12 @@ merge_output() {
      if [ -f "$outfile" ] ; then
       rm -rf "$outfile"
      fi
+     if ! [ -x "$(command -v anew)" ]; then
+      go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
+     fi
     fi
-    if [[ "$ext" == "txt" ]] || [[ "$ext" == "jsonl" ]]; then
+
+   if [[ "$ext" == "txt" ]] || [[ "$ext" == "jsonl" ]]; then
         echo "mode set to $ext.. sorting unique."
         find $tmp/output/ -type f -exec cat {} \; | sort -u > $tmp/merge
         output_lines=$(wc -l $tmp/merge | tr -s ' ' | cut -d ' ' -f 1)
@@ -1214,7 +1218,12 @@ function downloader () {
 while true; do
 sleep 30
 $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/_target_ $tmp/status/inprogress/_target_ --cache -F=$sshconfig >/dev/null 2>&1"
-ls $tmp/status/inprogress/ | anew -q $tmp/status/completed/hosts 
+for host in "$tmp/status/inprogress/"*
+ do 
+  echo "$(basename $host)" | tee -a "$tmp/status/completed/hosts" >/dev/null 2>&1
+  sort -u "$tmp/status/completed/hosts" -o "$tmp/status/completed/hosts" >/dev/null 2>&1
+done
+
 cat $tmp/status/completed/hosts | sort -u | wc -l | tee $tmp/status/downloader_instances  >/dev/null 2>&1
 cat $tmp/status/completed/hosts | sort -u | tee $tmp/status/downloader_hosts  >/dev/null 2>&1
 
@@ -1254,13 +1263,6 @@ cat $tmp/status/completed/hosts.tmp | sort -u >> $tmp/status/completed/hosts
  fi
 done
 }
-
-###########################################################################################################
-#  Install anew if not already installed
-#
-if ! [ -x "$(command -v anew)" ]; then
-go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
-fi
 
 ###########################################################################################################
 #  display STDOUT only flag (default is false and displays stdout & stderr)

@@ -361,13 +361,6 @@ else
 fi
 
 ###########################################################################################################
-#  Install anew if not already installed
-#
-if ! [ -x "$(command -v anew)" ]; then
-go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
-fi
-
-###########################################################################################################
 # unattended setup flag logic 
 #
 if [ -z ${config:+x} ]; then

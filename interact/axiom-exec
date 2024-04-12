@@ -349,7 +349,12 @@ function downloader () {
 while true; do
 sleep 2
 $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/_target_ $tmp/status/inprogress/_target_ --cache -F=$sshconfig >/dev/null 2>&1" 
-ls $tmp/status/inprogress/ | anew -q $tmp/status/completed/hosts 
+for host in "$tmp/status/inprogress/"*
+ do 
+  echo "$(basename $host)" | tee -a "$tmp/status/completed/hosts" >/dev/null 2>&1
+  sort -u "$tmp/status/completed/hosts" -o "$tmp/status/completed/hosts" >/dev/null 2>&1
+done
+
 cat $tmp/status/completed/hosts | sort -u | wc -l | tee $tmp/status/downloader_instances  >/dev/null 2>&1
 cat $tmp/status/completed/hosts | sort -u | tee $tmp/status/downloader_hosts  >/dev/null 2>&1
 if [[ "$(cat $tmp/status/downloader_instances)" -eq "0"  ]]; then
