@@ -350,9 +350,11 @@ while true; do
 sleep 2
 $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/_target_ $tmp/status/inprogress/_target_ --cache -F=$sshconfig >/dev/null 2>&1" 
 for host in "$tmp/status/inprogress/"*
- do 
-  echo "$(basename $host)" | tee -a "$tmp/status/completed/hosts" >/dev/null 2>&1
-  sort -u "$tmp/status/completed/hosts" -o "$tmp/status/completed/hosts" >/dev/null 2>&1
+do 
+  if [ -e "$host" ]; then  
+   echo "$(basename $host)" | tee -a "$tmp/status/completed/hosts" >/dev/null 2>&1
+   sort -u "$tmp/status/completed/hosts" -o "$tmp/status/completed/hosts" >/dev/null 2>&1
+  fi
 done
 
 cat $tmp/status/completed/hosts | sort -u | wc -l | tee $tmp/status/downloader_instances  >/dev/null 2>&1
