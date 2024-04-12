@@ -438,7 +438,7 @@ fi
 if [ -z ${config+x} ]; then
 echo -e "${BWhite}Beginning first packer build...${Color_Off}"
 cd "$AXIOM_PATH"/ || exit
-"$AXIOM_PATH"/interact/axiom-build
+"$AXIOM_PATH"/interact/axiom-build --setup
 cd || exit
 echo -e "${BWhite}You may need to restart your shell: $SHELL${Color_Off}"
 else
