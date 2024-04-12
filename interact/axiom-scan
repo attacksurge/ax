@@ -108,6 +108,7 @@ OPTIMIZATIONS:
    --upload string[]           before the scan, upload arbitrary file to scan working directory (/home/op/scan/\$module+\$timestamp) on remote instances (must be a path to a local file)
    --download string[]         after the scan, download arbitrary file from scan working directory (/home/op/scan/\$module+\$timestamp) on remote instances (must be a path to a remote file)
    --disable-oneshot           by default, if a module contains the string _target_ or _safe-target_ it is executed as a one-shot module. Use this flag to force disable
+   --unsafe                    by default, axiom will transparently replace _target_ with _safe-target_ in modules at runtime, use this flag to force disable
    --max-runtime DURATION[]    kill scan if still running after DURATION. DURATION is a floating point number with an optional suffix: 's' for seconds (the default), 'm' for minutes, 'h' for hours or 'd' for days.
    --preflight-timeout int[]   specifies the timeout (in seconds) used when connecting to the SSH server, instead of using the default 15 seconds
    --skip-preflight            do not automatically remove instances that can not be reached (default removes instances from the queue that can not be reached)
@@ -156,16 +157,16 @@ clean_up() {
 
      #  If --download is used, download a user provided file from tmp scan working dir
      if [[ "$download_user_arg" != "false" ]]; then
-      if [ -d "$download_file_path" ]; then
+      if [ -e "$(basename $download_file_path)" ]; then
        new_download_file_path=$download_file_path+$RANDOM
-       echo -e "${BGreen}local file $download_file_path already exists, downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$new_download_file_path${Color_Off} ] | ${Color_Off}"
+       echo -e "${BGreen}local file ${Color_Off}[ ${BBlue}$(basename $download_file_path) ${Color_Off} ] ${BGreen}already exists downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$(basename $new_download_file_path)${Color_Off} ]"
        mkdir -p $(basename $new_download_file_path)
-       $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$scan_dir/$(basename $download_file_path) $(basename $new_download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
+       $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$download_file_path $(basename $new_download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
        echo -e "${Green}arbitrary remote file downloaded successfully!${Color_Off}"
       else
-       echo -e "${BGreen}downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$download_file_path${Color_Off} ] | ${Color_Off}"
+       echo -e "${BGreen}downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$(basename $download_file_path)${Color_Off} ]"
        mkdir -p $(basename $download_file_path)
-       $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$scan_dir/$(basename $download_file_path) $(basename $download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
+       $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$download_file_path $(basename $download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
        echo -e "${Green}arbitrary remote file downloaded successfully!${Color_Off}"
       fi
     fi
@@ -453,7 +454,8 @@ preflight_timeout=15
 max_scan_runtime=0
 cycle_regions="false"
 stdout_only="false"
-unsafe="false"
+undocumented_unsafe="false"
+safe="true"
 expand_cidr="false"
 upload_user_arg="false"
 download_user_arg="false"
@@ -581,7 +583,7 @@ do
             quiet="true"
             set=true
             pass+=($i)
-        fi        
+        fi
         if [[ "$arg" == "--rm-when-done" ]]; then
             rm_when_done="true"
             set=true
@@ -695,8 +697,13 @@ do
             set=true
             pass+=($i)
         fi
-        if [[ "$arg" == "--unsafe" ]]; then
-            unsafe="true"
+        if [[ "$arg" == "unsafe" ]]; then
+            safe="false"
+            set=true
+            pass+=($i)
+        fi
+        if [[ "$arg" == "--undocumented_unsafe" ]]; then
+            undocumented_unsafe="true"
             set=true
             pass+=($i)
         fi
@@ -753,7 +760,7 @@ cat << EOF >&2
 ██║  ██║██╔╝ ██╗    ███████║╚██████╗██║  ██║██║ ╚████║
 ╚═╝  ╚═╝╚═╝  ╚═╝    ╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
 
-Author:Ax
+Author:Ax-ng (@0xtavian)
 EOF
 echo ''
 echo '
@@ -1112,7 +1119,10 @@ fi
 #  Transparently replace _target_ with _safe-target_
 #
 command="$(parse_module "$module" "$ext" | jq -r '.command')"
-command=${command//_target_/_safe-target_}  
+
+if [[ "$safe" == "true" ]]; then
+ command=${command//_target_/_safe-target_} 
+fi
 
 ###########################################################################################################
 #  If command line args are supplied, combine commands in the module with the arguments passed from the command line into final command (i.e. add_extra_args)
@@ -1284,9 +1294,9 @@ if [[ "$no_logs" == "true" ]]; then
 fi
 
 ###########################################################################################################
-#  undocumented --unsafe flag, do not use this unless you know what you are doing
+# --undocumented-unsafe flag, do not use this unless you know what you are doing
 #
-if [[ "$unsafe" == "true" ]]; then
+if [[ "$undocumented_unsafe" == "true" ]]; then
  dontexpandcidr="--no-cidr"
 fi
 
@@ -1333,16 +1343,16 @@ fi
 #  If --download is used, download a user provided file from tmp scan working dir
 #
 if [[ "$download_user_arg" != "false" ]]; then
- if [ -d "$download_file_path" ]; then
+ if [ -e "$(basename $download_file_path)" ]; then
   new_download_file_path=$download_file_path+$RANDOM
-  echo -e "${BGreen}local file $download_file_path already exists, downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$new_download_file_path${Color_Off} ] | ${Color_Off}"
+  echo -e "${BGreen}local file ${Color_Off}[ ${BBlue}$(basename $download_file_path) ${Color_Off} ] ${BGreen}already exists downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$(basename $new_download_file_path)${Color_Off} ]"
   mkdir -p $(basename $new_download_file_path)
-  $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$scan_dir/$(basename $download_file_path) $(basename $new_download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
+  $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$download_file_path $(basename $new_download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
   echo -e "${Green}arbitrary remote file downloaded successfully!${Color_Off}"
  else
-  echo -e "${BGreen}downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$download_file_path${Color_Off} ] | ${Color_Off}"
+  echo -e "${BGreen}downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$(basename $download_file_path)${Color_Off} ]"
   mkdir -p $(basename $download_file_path)
-  $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$scan_dir/$(basename $download_file_path) $(basename $download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
+  $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$download_file_path $(basename $download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
   echo -e "${Green}arbitrary remote file downloaded successfully!${Color_Off}"
  fi
 fi
