@@ -355,7 +355,7 @@ fi
 #
 if [ ! -d "$AXIOM_PATH" ]; then
     echo -e "${BGreen}Installing Ax scripts...${Color_Off}"
-    git clone https://github.com/Attack-Surge/ax "$AXIOM_PATH"
+    git clone https://github.com/attacksurge/ax "$AXIOM_PATH"
 else
     cd "$AXIOM_PATH" && git pull
 fi
