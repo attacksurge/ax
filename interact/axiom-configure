@@ -33,21 +33,10 @@ echo ''
 function bash_shell(){
     echo -e "${BGreen}Backing up $(echo "$HOME"/.bashrc) to $(echo "$HOME"/.bashrcbak) just in case.${Color_Off}"
     cp "$HOME"/.bashrc "$HOME"/.bashrcbak >> /dev/null 2>&1
-    if [[ -d "/usr/local/go/" ]] ; then
-    echo -e "${BGreen}Golang already installed, skipping...${Color_Off}" 
-    else
-    echo -e "${BGreen}Installing Golang 1.19.1${Color_Off}"
-    wget -q https://golang.org/dl/go1.19.1.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.19.1.linux-amd64.tar.gz && rm go1.19.1.linux-amd64.tar.gz
-    fi
-    mkdir -p "${HOME}/go"
-    export GOPATH=$HOME/go
-    export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
-    echo "export GOPATH=\$HOME/go" >> "${HOME}"/.bashrc
-    echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.bashrc
     source "${HOME}"/.bashrc
     SHELL=$(which bash)
     echo -e "${Green}You're running Bash! Installing Ax to \$PATH...${Color_Off}"
-    echo "export PATH=\"\$PATH:\$HOME/.axiom/interact\"" >>~/.bashrc
+    echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.bashrc
     echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.bashrc
     echo "[[ -f ~/.bashrc ]] && . ~/.bashrc" >> "${HOME}"/.bash_profile
     source ~/.bashrc  >> /dev/null 2>&1
@@ -57,19 +46,8 @@ function zsh_shell(){
     sudo apt install zsh -y
     echo -e "${BGreen}Backing up $(echo "$HOME"/.zshrc) to $(echo "$HOME"/.zshrcbak) just in case.${Color_Off}"
     cp "$HOME"/.zshrc "$HOME"/.zshrcbak >> /dev/null 2>&1
-    if [[ -d "/usr/local/go/" ]] ; then
-    echo -e "${BGreen}Golang already installed, skipping...${Color_Off}" 
-    else
-    echo -e "${BGreen}Installing Golang 1.19.1${Color_Off}"
-    wget -q https://golang.org/dl/go1.19.1.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.19.1.linux-amd64.tar.gz && rm go1.19.1.linux-amd64.tar.gz
-    fi
-    mkdir -p "${HOME}/go"
-    export GOPATH=$HOME/go
-    export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
-    echo "export GOPATH=\$HOME/go" >>~/.zshrc
-    echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin"  >>~/.zshrc
     echo -e "${Green}You're running ZSH! Installing Ax to \$PATH...${Color_Off}"
-    echo "export PATH=\"\$PATH:\$HOME/.axiom/interact\"" >>~/.zshrc  
+    echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc  
     echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >>~/.zshrc 
     source "${HOME}"/.zshrc >> /dev/null 2>&1
     SHELL=$(which zsh)
@@ -80,20 +58,8 @@ function omz_shell(){
     cp "$HOME"/.zshrc "$HOME"/.zshrcbak >> /dev/null 2>&1
     sudo apt install zsh zsh-syntax-highlighting zsh-autosuggestions -y
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-    if [[ -d "/usr/local/go/" ]] ; then
-    echo -e "${BGreen}Golang already installed, skipping...${Color_Off}" 
-    else
-    echo -e "${BGreen}Installing Golang 1.19.1${Color_Off}"
-    wget -q https://golang.org/dl/go1.19.1.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.19.1.linux-amd64.tar.gz && rm go1.19.1.linux-amd64.tar.gz
-    fi
-    mkdir -p "${HOME}/go"
-    export GOPATH=$HOME/go
-    export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
-    echo "export GOPATH=\$HOME/go" >>~/.zshrc
-    echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin"  >>~/.zshrc
-    echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH" >>~/.zshrc
     echo -e "${Green}You're running ZSH! Installing Ax to \$PATH...${Color_Off}"
-    echo "export PATH=\"\$PATH:\$HOME/.axiom/interact\"" >>~/.zshrc  
+    echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc  
     echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >>~/.zshrc   
     source "${HOME}"/.zshrc  >> /dev/null 2>&1
     SHELL=$(which zsh)
