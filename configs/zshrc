@@ -5,10 +5,6 @@ export GOPATH=/home/op/go
 export HOME=/home/op
 export PATH="$PATH:$HOME/.rvm/bin:/home/op/go/bin:/home/op/bin:/home/op/.local/bin:/usr/local/go/bin" 
 
-source $ZSH/oh-my-zsh.sh
-source ~/.profile
-source $HOME/bin/tmux-splash.sh
-
 alias ls=" ls --color -sh"
 alias wclone="wget -H -p -k"
 alias nmap="grc nmap"
@@ -19,5 +15,9 @@ alias ps="grc ps"
 
 zstyle ':omz:update' mode auto
 ZSH_THEME="mrtazz"
+
+source $ZSH/oh-my-zsh.sh
+source ~/.profile
+source $HOME/bin/tmux-splash.sh
 
 stty sane
