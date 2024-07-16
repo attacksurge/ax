@@ -139,14 +139,6 @@ if [ -z "$provisioner" ]; then
 fi
 
 ############################################################################################################
-# opportunity to cancel axiom-build
-#
-echo -e "${Red}Now your account is setup, now running axiom-build"
-echo "A build will take about 25 minutes, spin up a temporary instance, and then snapshot it to use for our future boxes"
-echo -e "Starting Build in 5 seconds... Ctrl+C to quit, remember, you can just type axiom-build at any time${Color_Off}"
-sleep 5
-
-############################################################################################################
 # check the provisioner and bulder exist 
 #
 #if [ ! -z $provisioner ]
@@ -199,6 +191,7 @@ if [[ "$custom_ssh_key" == false ]]; then
   echo -e "${BGreen}Adding axiom_rsa SSH key to Packer Builder${Color_Off}"
   cat ~/.ssh/axiom_rsa.pub >$AXIOM_PATH/configs/authorized_keys
   jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+  sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
 
 # If axiom_rsa is not created, create it and then add it to "$AXIOM_PATH/axiom.json" and Packer builder
  else 
@@ -206,6 +199,7 @@ if [[ "$custom_ssh_key" == false ]]; then
   ssh-keygen -b 2048 -t rsa -f ~/.ssh/axiom_rsa -q -N ""
   jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
   cat ~/.ssh/axiom_rsa.pub >$AXIOM_PATH/configs/authorized_keys
+  sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
  fi
 
  if [[ ! -f "$AXIOM_PATH/configs/authorized_keys" ]]
@@ -278,6 +272,13 @@ cat "$account_path" | jq '.linode_key = "***************************************
  jq '.imageid = "'$snapshot_name'"' | jq '.op = "'$op_ssh_password'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 fi
 
+############################################################################################################
+# opportunity to cancel axiom-build
+#
+echo -e "${Red}Now your account is setup, now running axiom-build"
+echo "A build will take about 25 minutes, spin up a temporary instance, and then snapshot it to use for our future boxes"
+echo -e "Starting Build in 5 seconds... Ctrl+C to quit, remember, you can just type axiom-build at any time${Color_Off}"
+sleep 5
 
 #############################################################################################################
 # Change packer version for IBM
