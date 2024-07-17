@@ -105,8 +105,8 @@ CONFIGURATIONS:
    --local-config string[]     replace _config_ in module with user-provided local configuration file to upload (must be a local configuration file)
 
 OPTIMIZATIONS:
-   --upload string[]           before the scan, upload arbitrary file to scan working directory (/home/op/scan/\$module+\$timestamp) on remote instances (must be a path to a local file)
-   --download string[]         after the scan, download arbitrary file from scan working directory (/home/op/scan/\$module+\$timestamp) on remote instances (must be a path to a remote file)
+   --upload string[]           before the scan, upload a file to the unique scan working directory (/home/op/scan/\$module+\$timestamp) on remote instances (must be a path to a local file)
+   --download string[]         after the scan, download a file from the unique scan working directory (/home/op/scan/\$module+\$timestamp) on remote instances (must be a path to a remote file)
    --disable-oneshot           by default, if a module contains the string _target_ or _safe-target_ it is executed as a one-shot module. Use this flag to force disable
    --unsafe                    by default, axiom will transparently replace _target_ with _safe-target_ in modules at runtime, use this flag to force disable
    --max-runtime DURATION[]    kill scan if still running after DURATION. DURATION is a floating point number with an optional suffix: 's' for seconds (the default), 'm' for minutes, 'h' for hours or 'd' for days.
