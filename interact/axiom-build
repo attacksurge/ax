@@ -189,8 +189,8 @@ if [[ "$custom_ssh_key" == false ]]; then
 # If axiom_rsa key is already created but not in "$AXIOM_PATH/axiom.json", add it to $AXIOM_PATH/axiom.json" and Packer builder
  elif [ -f ~/.ssh/axiom_rsa ] ; then
   echo -e "${BGreen}Adding axiom_rsa SSH key to Packer Builder${Color_Off}"
-  cat ~/.ssh/axiom_rsa.pub >$AXIOM_PATH/configs/authorized_keys
   jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+  cat ~/.ssh/axiom_rsa.pub >$AXIOM_PATH/configs/authorized_keys
   sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
 
 # If axiom_rsa is not created, create it and then add it to "$AXIOM_PATH/axiom.json" and Packer builder
@@ -212,10 +212,11 @@ if [[ "$custom_ssh_key" == false ]]; then
 
 else
  if [ -f $custom_ssh_key ] ; then
-  sshkey=$(basename $custom_ssh_key | rev | cut -d . -f 2- |rev)
   if [ "${custom_ssh_key: -4}" == ".pub" ]; then
    echo -e "${BGreen}Adding $custom_ssh_key SSH key to Packer Builder${Color_Off}"
+   sshkey=$(basename $custom_ssh_key | rev | cut -d . -f 2- |rev)
    cat $custom_ssh_key >$AXIOM_PATH/configs/authorized_keys
+   jq '.sshkey="'$sshkey'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
   else
    echo -e "${Red}Error: the ssh key provided does not end in .pub. You must provide a public SSH key..exiting..."
    exit 1
@@ -358,4 +359,3 @@ fi
 jq '.op="'$op_ssh_password'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
 jq '.imageid="'$snapshot_name'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
 jq '.provisioner="'$provisioner'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
-jq '.sshkey="'$sshkey'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"

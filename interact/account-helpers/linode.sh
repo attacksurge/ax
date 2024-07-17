@@ -51,7 +51,7 @@ fi
 
 function setuplinode(){
 echo -e "${BGreen}Sign up for an account using this link for \$100 free credit: https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d\nObtain a personal access token from: https://cloud.linode.com/profile/tokens${Color_Off}"
-echo -e -n "${BGreen}Do you already have a Linode account? y/n ${Color_Off}"
+echo -e -n "${Blue}Do you already have a Linode account? y/n ${Color_Off}"
 read acc 
 
 echo -e -n "${Green}Please enter your token (required): \n>> ${Color_Off}"
@@ -65,13 +65,13 @@ done
 echo -e -n "${Green}Please enter your default region: (Default 'us-east', press enter) \n>> ${Color_Off}"
 read region
 	if [[ "$region" == "" ]]; then
-	echo -e "${BGreen}Selected default option 'us-east'${Color_Off}"
+	echo -e "${Blue}Selected default option 'us-east'${Color_Off}"
 	region="us-east"
 	fi
 	echo -e -n "${Green}Please enter your default size: (Default 'g6-standard-1', press enter) \n>> ${Color_Off}"
 	read size
 	if [[ "$size" == "" ]]; then
-	echo -e "${BGreen}Selected default option 'g6-standard-1'${Color_Off}"
+	echo -e "${Blue}Selected default option 'g6-standard-1'${Color_Off}"
         size="g6-standard-1"
 fi
 

@@ -79,13 +79,13 @@ default_region="us-west-2"
 echo -e -n "${Green}Please enter your default region: (Default '$default_region', press enter) \n>> ${Color_Off}"
 read region
 	if [[ "$region" == "" ]]; then
-	echo -e "${BGreen}Selected default option '$default_region'${Color_Off}"
+	echo -e "${Blue}Selected default option '$default_region'${Color_Off}"
 	region="$default_region"
 	fi
 	echo -e -n "${Green}Please enter your default size: (Default 't2.medium', press enter) \n>> ${Color_Off}"
 	read size
 	if [[ "$size" == "" ]]; then
-	echo -e "${BGreen}Selected default option 't2.medium'${Color_Off}"
+	echo -e "${Blue}Selected default option 't2.medium'${Color_Off}"
         size="t2.medium"
 fi
 

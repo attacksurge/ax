@@ -81,13 +81,13 @@ default_region=nyc1
 echo -e -n "${Green}Please enter your default region: (Default '$default_region', press enter) \n>> ${Color_Off}"
 read region
 	if [[ "$region" == "" ]]; then
-	echo -e "${BGreen}Selected default option '$default_region'${Color_Off}"
+	echo -e "${Blue}Selected default option '$default_region'${Color_Off}"
 	region="$default_region"
 	fi
 	echo -e -n "${Green}Please enter your default size: (Default 's-1vcpu-1gb', press enter) \n>> ${Color_Off}"
 	read size
 	if [[ "$size" == "" ]]; then
-	echo -e "${BGreen}Selected default option 's-1vcpu-1gb'${Color_Off}"
+	echo -e "${Blue}Selected default option 's-1vcpu-1gb'${Color_Off}"
         size="s-1vcpu-1gb"
 fi
 

@@ -161,14 +161,14 @@ echo -e -n "${Green}Please enter your default region: (Default 'dal13', press en
 read region
 if [[ "$region" == "" ]]; then
 
-	echo -e "${BGreen}Selected default option 'dal13'${Color_Off}"
+	echo -e "${Blue}Selected default option 'dal13'${Color_Off}"
 	region="dal13"
 fi
 echo -e -n "${Green}Please enter your default size: (Default '2048', press enter) \n${Color_Off}"
 echo -e -n "${Green}Options: 2048, 4096, 8192, 16384, 32768, 64512\n>> ${Color_Off}"
 read size
 if [[ "$size" == "" ]]; then
-	echo -e "${BGreen}Selected default option '2048'${Color_Off}"
+	echo -e "${Blue}Selected default option '2048'${Color_Off}"
   size="2048"
 fi
 echo -e -n "${Green}Please enter amount of CPU Cores: (Default '2', press enter) \n${Color_Off}"
@@ -176,7 +176,7 @@ echo -e -n "${Green}Options: 1, 2, 4, 8, 16, 32, 48\n>> ${Color_Off}"
 
 read cpu
 if [[ "$cpu" == "" ]]; then
-  echo -e "${BGreen}Selected default option '2'${Color_Off}"
+  echo -e "${Blue}Selected default option '2'${Color_Off}"
   cpu="2"
 fi
 }

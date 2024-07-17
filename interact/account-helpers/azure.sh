@@ -91,7 +91,7 @@ sub_id="$(az account show --query "{ subscription_id: id }" | jq -r .subscriptio
 echo -e -n "${Green}Please enter your subscription_id: (Default is $(echo $sub_id), press enter) \n>> ${Color_Off}"
 read user_sub_id
 if [[ "$user_sub_id" == "" ]]; then
-    echo -e "${BGreen}Selected default subscription_id $sub_id${Color_Off}"
+    echo -e "${Blue}Selected default subscription_id $sub_id${Color_Off}"
     else
     sub_id=$user_sub_id
 fi
@@ -104,7 +104,7 @@ echo -e -n "${Green}Please enter your default region: (Default 'eastus', press e
 read region
 
 if [[ "$region" == "" ]]; then
-    echo -e "${BGreen}Selected default option 'eastus'${Color_Off}"
+    echo -e "${Blue}Selected default option 'eastus'${Color_Off}"
     region="eastus"
 fi
 
@@ -115,7 +115,7 @@ echo -e -n "${Green}Please enter your default size: (Default 'Standard_B1ls'), p
 read size
 
 if [[ "$size" == "" ]]; then
-    echo -e "${BGreen}Selected default option 'Standard_B1ls'${Color_Off}"
+    echo -e "${Blue}Selected default option 'Standard_B1ls'${Color_Off}"
     size="Standard_B1ls"
 fi
 
@@ -126,7 +126,7 @@ echo -e -n "${Green}Please enter your resource group name: (Default 'axiom'), pr
 read resource_group
 
 if [[ "$resource_group" == "" ]]; then
-    echo -e "${BGreen}Selected default option 'axiom'${Color_Off}"
+    echo -e "${Blue}Selected default option 'axiom'${Color_Off}"
     resource_group="axiom"
 fi
 
