@@ -12,7 +12,7 @@ cat << EOF
 ██║  ██║██╔╝ ██╗    ╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝╚██████╔╝██║  ██║███████╗
 ╚═╝  ╚═╝╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚══════╝
 
-Author:Ax-ng (@0xtavian)
+Maintainer:@0xtavian
 
 EOF
 
@@ -31,8 +31,9 @@ echo ''
 # Shell setup functions
 #
 function bash_shell(){
-    echo -e "${BGreen}Backing up $(echo "$HOME"/.bashrc) to $(echo "$HOME"/.bashrcbak) just in case.${Color_Off}"
-    cp "$HOME"/.bashrc "$HOME"/.bashrcbak >> /dev/null 2>&1
+    timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+    echo -e "${BGreen}Backing up $(echo "$HOME"/.bashrc) to $(echo "$HOME"/.bashrc-$timestamp) just in case.${Color_Off}"
+    cp "$HOME"/.bashrc "$HOME"/.bashrc-$timestamp >> /dev/null 2>&1
 
     if [[ "$unattended" == "true" ]]; then
      echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
@@ -80,9 +81,10 @@ function bash_shell(){
 }
 
 function zsh_shell(){
+    timestamp=$(date +%Y-%m-%d_%H-%M-%S)
     sudo apt install zsh -y
-    echo -e "${BGreen}Backing up $(echo "$HOME"/.zshrc) to $(echo "$HOME"/.zshrcbak) just in case.${Color_Off}"
-    cp "$HOME"/.zshrc "$HOME"/.zshrcbak >> /dev/null 2>&1
+    echo -e "${BGreen}Backing up $(echo "$HOME"/.zshrc) to $(echo "$HOME"/.zshrc-$timestamp) just in case.${Color_Off}"
+    cp "$HOME"/.zshrc "$HOME"/.zshrc-$timestamp >> /dev/null 2>&1
 
     if [[ "$unattended" == "true" ]]; then
      echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
@@ -92,8 +94,6 @@ function zsh_shell(){
      export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
      echo "export GOPATH=\$HOME/go" >> "${HOME}"/.zshrc
      echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.zshrc
-     source "${HOME}"/.zshrc
-     SHELL=$(which zshrc)
      echo -e "${Green}You're running Zsh! Installing Ax to \$PATH...${Color_Off}"
      echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
      echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc
@@ -110,8 +110,6 @@ function zsh_shell(){
       export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
       echo "export GOPATH=\$HOME/go" >> "${HOME}"/.zshrc
       echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.zshrc
-      source "${HOME}"/.zshrc
-      SHELL=$(which zshrc)
       echo -e "${Green}You're running Zsh! Installing Ax to \$PATH...${Color_Off}"
       echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
       echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc
@@ -128,8 +126,12 @@ function zsh_shell(){
 }
 
 function omz_shell(){
-    echo -e "${BGreen}Backing up $(echo "$HOME"/.zshrc) to $(echo "$HOME"/.zshrcbak) just in case.${Color_Off}"
-    cp "$HOME"/.zshrc "$HOME"/.zshrcbak >> /dev/null 2>&1
+    timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+    echo -e "${BGreen}Backing up $(echo "$HOME"/.zshrc) to $(echo "$HOME"/.zsh-$timestamp) just in case.${Color_Off}"
+    mv "$HOME"/.zshrc "$HOME"/.zshrc-$timestamp >> /dev/null 2>&1
+    echo -e "${BGreen}Backing up $(echo "$HOME"/.oh-my-zsh/) to $(echo "$HOME"/.oh-my-zsh-$timestamp) just in case.${Color_Off}"
+    mv "$HOME"/.oh-my-zsh "$HOME"/.oh-my-zsh-$timestamp >> /dev/null 2>&1
+
     sudo apt install zsh zsh-syntax-highlighting zsh-autosuggestions -y
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
     if [[ "$unattended" == "true" ]]; then
@@ -140,8 +142,6 @@ function omz_shell(){
      export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
      echo "export GOPATH=\$HOME/go" >> "${HOME}"/.zshrc
      echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.zshrc
-     source "${HOME}"/.zshrc
-     SHELL=$(which zshrc)
      echo -e "${Green}You're running Oh-My-Zsh! Installing Ax to \$PATH...${Color_Off}"
      echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
      echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc
@@ -158,8 +158,6 @@ function omz_shell(){
       export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
       echo "export GOPATH=\$HOME/go" >> "${HOME}"/.zshrc
       echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.zshrc
-      source "${HOME}"/.zshrc
-      SHELL=$(which zshrc)
       echo -e "${Green}You're running Oh-My-Zsh! Installing Ax to \$PATH...${Color_Off}"
       echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
       echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc
