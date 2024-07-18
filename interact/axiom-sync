@@ -46,6 +46,7 @@ fi
 
 # iterate over the instance supplied and download the home dir recursively
 if [[ ! -z "$1" ]]; then
+mkdir -p $AXIOM_PATH/boxes
 for var in "$@"
 do
  instance=$var
