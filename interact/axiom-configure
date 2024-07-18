@@ -33,24 +33,98 @@ echo ''
 function bash_shell(){
     echo -e "${BGreen}Backing up $(echo "$HOME"/.bashrc) to $(echo "$HOME"/.bashrcbak) just in case.${Color_Off}"
     cp "$HOME"/.bashrc "$HOME"/.bashrcbak >> /dev/null 2>&1
-    source "${HOME}"/.bashrc
-    SHELL=$(which bash)
-    echo -e "${Green}You're running Bash! Installing Ax to \$PATH...${Color_Off}"
-    echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.bashrc
-    echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.bashrc
-    echo "[[ -f ~/.bashrc ]] && . ~/.bashrc" >> "${HOME}"/.bash_profile
-    source ~/.bashrc  >> /dev/null 2>&1
+
+    if [[ "$unattended" == "true" ]]; then
+     echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
+     wget -q https://golang.org/dl/go1.22.2.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && rm go1.22.2.linux-amd64.tar.gz
+     mkdir -p "${HOME}/go"
+     export GOPATH=$HOME/go
+     export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+     echo "export GOPATH=\$HOME/go" >> "${HOME}"/.bashrc
+     echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.bashrc
+     source "${HOME}"/.bashrc
+     SHELL=$(which bash)
+     echo -e "${Green}You're running Bash! Installing Ax to \$PATH...${Color_Off}"
+     echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.bashrc
+     echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.bashrc
+     echo "[[ -f ~/.bashrc ]] && . ~/.bashrc" >> "${HOME}"/.bash_profile
+     source ~/.bashrc  >> /dev/null 2>&1
+    else
+     echo -e "${BYellow}Do you want to install Golang 1.22.2? y/n ${Color_Off}"
+     read acc
+     if [[ "$acc" == "y" ]]; then
+      echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
+      wget -q https://golang.org/dl/go1.22.2.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && rm go1.22.2.linux-amd64.tar.gz
+      mkdir -p "${HOME}/go"
+      export GOPATH=$HOME/go
+      export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+      echo "export GOPATH=\$HOME/go" >> "${HOME}"/.bashrc
+      echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.bashrc
+      source "${HOME}"/.bashrc
+      SHELL=$(which bash)
+      echo -e "${Green}You're running Bash! Installing Ax to \$PATH...${Color_Off}"
+      echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.bashrc
+      echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.bashrc
+      echo "[[ -f ~/.bashrc ]] && . ~/.bashrc" >> "${HOME}"/.bash_profile
+      source ~/.bashrc  >> /dev/null 2>&1
+     else
+      source "${HOME}"/.bashrc
+      SHELL=$(which bash)
+      echo -e "${Green}You're running Bash! Installing Ax to \$PATH...${Color_Off}"
+      echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.bashrc
+      echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.bashrc
+      echo "[[ -f ~/.bashrc ]] && . ~/.bashrc" >> "${HOME}"/.bash_profile
+      source ~/.bashrc  >> /dev/null 2>&1
+     fi
+    fi
 }
 
 function zsh_shell(){
     sudo apt install zsh -y
     echo -e "${BGreen}Backing up $(echo "$HOME"/.zshrc) to $(echo "$HOME"/.zshrcbak) just in case.${Color_Off}"
     cp "$HOME"/.zshrc "$HOME"/.zshrcbak >> /dev/null 2>&1
-    echo -e "${Green}You're running ZSH! Installing Ax to \$PATH...${Color_Off}"
-    echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc  
-    echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >>~/.zshrc 
-    source "${HOME}"/.zshrc >> /dev/null 2>&1
-    SHELL=$(which zsh)
+
+    if [[ "$unattended" == "true" ]]; then
+     echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
+     wget -q https://golang.org/dl/go1.22.2.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && rm go1.22.2.linux-amd64.tar.gz
+     mkdir -p "${HOME}/go"
+     export GOPATH=$HOME/go
+     export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+     echo "export GOPATH=\$HOME/go" >> "${HOME}"/.zshrc
+     echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.zshrc
+     source "${HOME}"/.zshrc
+     SHELL=$(which zshrc)
+     echo -e "${Green}You're running Zsh! Installing Ax to \$PATH...${Color_Off}"
+     echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
+     echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc
+     source "${HOME}"/.zshrc >> /dev/null 2>&1
+     SHELL=$(which zsh)
+    else
+     echo -e "${BYellow}Do you want to install Golang 1.22.2? y/n ${Color_Off}"
+     read acc
+     if [[ "$acc" == "y" ]]; then
+      echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
+      wget -q https://golang.org/dl/go1.22.2.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && rm go1.22.2.linux-amd64.tar.gz
+      mkdir -p "${HOME}/go"
+      export GOPATH=$HOME/go
+      export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+      echo "export GOPATH=\$HOME/go" >> "${HOME}"/.zshrc
+      echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.zshrc
+      source "${HOME}"/.zshrc
+      SHELL=$(which zshrc)
+      echo -e "${Green}You're running Zsh! Installing Ax to \$PATH...${Color_Off}"
+      echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
+      echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc
+      source "${HOME}"/.zshrc >> /dev/null 2>&1
+      SHELL=$(which zsh)
+     else
+      echo -e "${Green}You're running ZSH! Installing Ax to \$PATH...${Color_Off}"
+      echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
+      echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >>~/.zshrc
+      source "${HOME}"/.zshrc >> /dev/null 2>&1
+      SHELL=$(which zsh)
+     fi
+    fi
 }
 
 function omz_shell(){
@@ -58,11 +132,47 @@ function omz_shell(){
     cp "$HOME"/.zshrc "$HOME"/.zshrcbak >> /dev/null 2>&1
     sudo apt install zsh zsh-syntax-highlighting zsh-autosuggestions -y
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-    echo -e "${Green}You're running ZSH! Installing Ax to \$PATH...${Color_Off}"
-    echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc  
-    echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >>~/.zshrc   
-    source "${HOME}"/.zshrc  >> /dev/null 2>&1
-    SHELL=$(which zsh)
+    if [[ "$unattended" == "true" ]]; then
+     echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
+     wget -q https://golang.org/dl/go1.22.2.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && rm go1.22.2.linux-amd64.tar.gz
+     mkdir -p "${HOME}/go"
+     export GOPATH=$HOME/go
+     export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+     echo "export GOPATH=\$HOME/go" >> "${HOME}"/.zshrc
+     echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.zshrc
+     source "${HOME}"/.zshrc
+     SHELL=$(which zshrc)
+     echo -e "${Green}You're running Oh-My-Zsh! Installing Ax to \$PATH...${Color_Off}"
+     echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
+     echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc
+     source "${HOME}"/.zshrc >> /dev/null 2>&1
+     SHELL=$(which zsh)
+    else
+     echo -e "${BYellow}Do you want to install Golang 1.22.2? y/n ${Color_Off}"
+     read acc
+     if [[ "$acc" == "y" ]]; then
+      echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
+      wget -q https://golang.org/dl/go1.22.2.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && rm go1.22.2.linux-amd64.tar.gz
+      mkdir -p "${HOME}/go"   
+      export GOPATH=$HOME/go
+      export PATH=$GOPATH/bin:/usr/local/go/bin:$PATH
+      echo "export GOPATH=\$HOME/go" >> "${HOME}"/.zshrc
+      echo "export PATH=\$GOPATH/bin:/usr/local/go/bin:\$PATH:\$HOME/.local/bin" >> "${HOME}"/.zshrc
+      source "${HOME}"/.zshrc
+      SHELL=$(which zshrc)
+      echo -e "${Green}You're running Oh-My-Zsh! Installing Ax to \$PATH...${Color_Off}"
+      echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
+      echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc
+      source "${HOME}"/.zshrc >> /dev/null 2>&1
+      SHELL=$(which zsh)
+     else
+      echo -e "${Green}You're running Oh-My-Zsh! Installing Ax to \$PATH...${Color_Off}"
+      echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >>~/.zshrc
+      echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >>~/.zshrc
+      source "${HOME}"/.zshrc >> /dev/null 2>&1
+      SHELL=$(which zsh)
+     fi
+    fi
 }
 
 ###########################################################################################################
@@ -249,15 +359,8 @@ if [[ $BASEOS == "Mac" ]]; then
          sudo chown -R $(whoami) /usr/local/share/zsh /usr/local/share/zsh/site-functions
          chmod u+w /usr/local/share/zsh /usr/local/share/zsh/site-functions
          chmod u+w /usr/local/etc/bash_completion.d /usr/local/lib/pkgconfig /usr/local/share/aclocal /usr/local/share/doc /usr/local/share/info /usr/local/share/locale /usr/local/share/man /usr/local/share/man/man1 /usr/local/share/man/man3 /usr/local/share/man/man5 /usr/local/share/man/man7
-         if ! command -v wget &> /dev/null; then
-          echo -e "${BGreen}Installing wget...${Color_Off}"
-          brew install wget
-	 fi
- 
-         if ! command -v go &> /dev/null; then
-          echo -e "${BGreen}Installing go...${Color_Off}"
-          brew install golang
-	 fi
+         echo -e "${BGreen}Installing wget...${Color_Off}"
+         brew install wget
          mkdir -p "${HOME}/go"
          export GOPATH=$HOME/go
          echo "export GOPATH=\$HOME/go" >>~/.zshrc
@@ -268,10 +371,34 @@ if [[ $BASEOS == "Mac" ]]; then
          brew install jq
          echo -e "${BGreen}Installing coreutils...${Color_Off}"
          brew install coreutils
-         if ! command -v python3 &> /dev/null; then
+         echo "source $HOME/.axiom/interact/includes/ax-completion.sh" >> ~/.zshrc 
+         if [[ "$unattended" == "true" ]]; then
           echo -e "${BGreen}Installing Python3...${Color_Off}"
           brew install python3
-	 fi
+          echo -e "${BGreen}Installing setuptools...${Color_Off}"
+          pip3 install setuptools --break-system-packages
+          echo -e "${BGreen}Installing go...${Color_Off}"
+          brew install golang 
+        else
+          echo -e "${BYellow}Do you want to upgrade Python (brew install python3) y/n ${Color_Off}"
+          read acc
+          if [[ "$acc" == "y" ]]; then 
+           echo -e "${BGreen}Installing Python3...${Color_Off}"
+           brew install python3
+	  fi
+           echo -e "${BYellow}Do you want to install setuptools? this will break system packages (pip3 install setuptools --break-system-packages)  y/n ${Color_Off}"
+           read acc
+          if [[ "$acc" == "y" ]]; then
+           echo -e "${BGreen}Installing setuptools...${Color_Off}"
+           pip3 install setuptools --break-system-packages
+          fi
+          echo -e "${BYellow}Do you want to install/update Go? (brew install golang) y/n ${Color_Off}"
+          read acc
+          if [[ "$acc" == "y" ]]; then
+           echo -e "${BGreen}Installing go...${Color_Off}"
+           brew install golang
+          fi
+         fi
          echo -e "${BGreen}Installing Interlace...${Color_Off}"
          sudo rm -fr /tmp/interlace
          git clone https://github.com/codingo/Interlace.git /tmp/interlace
@@ -280,7 +407,7 @@ if [[ $BASEOS == "Mac" ]]; then
          brew tap hashicorp/tap
          brew install hashicorp/tap/packer
          brew upgrade hashicorp/tap/packer
-         source "${HOME}"/.zshrc
+         source "${HOME}"/.zshrc >> /dev/null 2>&1
          SHELL=$(which zsh)
 fi
 

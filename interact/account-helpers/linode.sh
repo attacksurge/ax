@@ -30,6 +30,11 @@ case $BASEOS in
 *) ;;
 esac
 
+function setuplinode(){
+echo -e "${BGreen}Sign up for an account using this link for \$100 free credit: https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d\nObtain a personal access token from: https://cloud.linode.com/profile/tokens${Color_Off}"
+echo -e -n "${Blue}Do you already have a Linode account? y/n ${Color_Off}"
+read acc 
+
 if [[ "$acc" == "n" ]]; then
     echo -e "${BGreen}Launching browser with signup page...${Color_Off}"
     if [ $BASEOS == "Mac" ]; then
@@ -48,11 +53,6 @@ if [[ "$acc" == "n" ]]; then
     xdg-open "https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d"
     fi
 fi
-
-function setuplinode(){
-echo -e "${BGreen}Sign up for an account using this link for \$100 free credit: https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d\nObtain a personal access token from: https://cloud.linode.com/profile/tokens${Color_Off}"
-echo -e -n "${Blue}Do you already have a Linode account? y/n ${Color_Off}"
-read acc 
 
 echo -e -n "${Green}Please enter your token (required): \n>> ${Color_Off}"
 read token

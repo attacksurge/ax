@@ -72,7 +72,9 @@ instance_pretty() {
   type="$(jq -r .default_size "$AXIOM_PATH/axiom.json")"
   #monthly price of linode type 
   price=$(linode-cli linodes type-view $type --json|jq -r '.[].price.monthly')
-  totalPrice=$(( $price * $linodes))
+#  totalPrice=$(( "$price * $linodes" | bc))
+totalPrice=$(awk "BEGIN {print $price * $linodes}")
+
   header="Instance,Primary Ip,Backend Ip,Region,Memory,Status,\$/M"
   totals="_,_,_,Instances,$linodes,Total,\$$totalPrice"
   fields=".[] | [.label,.ipv4[0],.ipv4[1],.region,.specs.memory,.status, \"$price\"]| @csv"
