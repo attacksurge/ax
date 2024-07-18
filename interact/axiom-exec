@@ -45,7 +45,7 @@ preflight_timeout=5
 # TODO add axiom-scp extention for arb upload and download
 #
 function usage() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  Evaluate shell one-liners or execute single commands on one or more instances in parallel" 
         echo -e "  Specify the fleet prefix, or let axiom use selected.conf by default (located in ~/.axiom/selected.conf)"
         echo -e "  Execute command(s) from a detached tmux session on the remote instances" 

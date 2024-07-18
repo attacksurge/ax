@@ -73,7 +73,7 @@ split=false
 # Help Menu:
 # 
 function help() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  axiom-scp supports downloading and uploading files or folders to fleets of axiom instance or single instances"
         echo -e "  axiom-scp optionally allows splitting a local file across a fleet of instances"
         echo -e "  axiom-scp supports globbing to expand the instance names from a fleet prefix"

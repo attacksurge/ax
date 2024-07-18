@@ -105,7 +105,7 @@ fi
 # Help Menu
 # 
 function usage() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  Initialize one axiom instance with differnet options, such as image, region, size and axiom deployment profiles"
         echo -e "${BWhite}Examples:${Color_Off}"
         echo -e "  ${BGreen}axiom-init --run${Color_Off} # provision instance with random name"

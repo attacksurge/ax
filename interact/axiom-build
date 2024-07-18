@@ -23,7 +23,7 @@ custom_ssh_key=false
 # Help Menu:
 # 
 function help() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  axiom-build combines the cloud providers builder file (~/.axiom/images/builders) with a provisioner file (~/.axiom/images/provisioners)"
         echo -e "  into a Packer JSON file (located ~/.axiom/images/axiom.json)"
         echo -e "  axiom-build uses Packer to create an image with tools installed (defined by the provisioner)"

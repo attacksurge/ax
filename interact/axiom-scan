@@ -114,7 +114,7 @@ OPTIMIZATIONS:
    --skip-preflight            do not automatically remove instances that can not be reached (default removes instances from the queue that can not be reached)
 
 OUTPUT:
-   -anew string[]       pipe the output to anew before creating the final output file
+   -anew string[]       pipe the output to anew before creating the final output file (requires Go install)
    -o string[]          output as default (the first ext mentioned in the module)
    -oD/-oA string[]     output as directory (must also be supplied in the module using "ext":"dir" or "ext":"")
    -oG string[]         output as greppable, merge and sort unique (must also be supplied in the module using "ext":"oG")

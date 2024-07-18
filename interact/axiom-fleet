@@ -78,7 +78,7 @@ fi
 # Help Menu
 # 
 function usage() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  Spin up fleets of axiom instances in one or multiple regions."
         echo -e "  Specify the name of your fleet (fleet prefix) or have axiom choose for you."
         echo -e "${BWhite}Examples:${Color_Off}"

@@ -57,7 +57,7 @@ toggle=false
 # Help Menu:
 # 
 function usage() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  axiom-ssh dynamically generates axiom's SSH config based on your cloud inventory." 
         echo -e "  axiom-ssh allows you to connect to your axiom instances over their public or private network interface." 
         echo -e "  axiom-ssh can drop you right into a freshly created tmux session on the remote instance, and can be used to"
