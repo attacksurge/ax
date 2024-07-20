@@ -104,9 +104,6 @@
         "echo 'Installing Amass'",
         "wget -q -O /tmp/amass.zip https://github.com/OWASP/Amass/releases/download/v3.21.2/amass_linux_amd64.zip && cd /tmp/ && unzip /tmp/amass.zip && mv /tmp/amass_linux_amd64/amass /usr/bin/amass",
 
-        "echo 'Installing aquatone'",
-        "wget -q -O /tmp/aquatone.zip https://github.com/michenriksen/aquatone/releases/download/v1.7.0/aquatone_linux_amd64_1.7.0.zip && cd /tmp/ && unzip /tmp/aquatone.zip && mv /tmp/aquatone /usr/bin/aquatone",
-
         "echo 'Installing Arjun'",
         "cd /tmp && git clone https://github.com/s0md3v/Arjun && cd Arjun && sudo python3 setup.py install && cd",
 
@@ -115,7 +112,7 @@
 
         "echo 'Installing cero'",
         "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/cero/Dockerfile -t axiom/cero'",
-        
+
         "echo 'Installing chaos-client'",
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/chaos-client/cmd/chaos@latest'",
 
@@ -142,7 +139,7 @@
 
         "echo 'Installing dnsgen'",
         "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/dnsgen/Dockerfile -t axiom/dnsgen'",
-        
+
         "echo 'Installing dnsrecon'",
         "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/dnsrecon/Dockerfile -t axiom/dnsrecon'",
 
@@ -151,9 +148,6 @@
 
         "echo 'Installing dnsx'",
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest'",
-
-        "echo 'Installing ERLPopper'",
-        "git clone https://github.com/maikthulhu/ERLPopper.git /home/op/recon/ERLPopper",
 
         "echo 'Installing exclude-cdn'",
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/Cgboal/exclude-cdn@latest'",
@@ -181,7 +175,7 @@
 
         "echo 'Installing Gf-Patterns'",
         "git clone https://github.com/1ndianl33t/Gf-Patterns /home/op/.gf",
-        
+
         "echo 'Installing github-subdomains'",
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/gwen001/github-subdomains@latest'",
 
@@ -194,17 +188,8 @@
         "echo 'Installing google-chrome'",
         "wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && cd /tmp/ && sudo apt install -y /tmp/chrome.deb -qq && apt --fix-broken install -qq",
 
-        "echo 'Installing gorgo'",
-        "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/gorgo/Dockerfile -t axiom/gorgo'",
-
-        "echo 'Installing gospider'",
-        "/bin/su -l op -c '/usr/local/go/bin/go install github.com/jaeles-project/gospider@latest'",
-
         "echo 'Installing gowitness'",
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/sensepost/gowitness@latest'",
- 
-        "echo 'Installing gron'",
-        "/bin/su -l op -c '/usr/local/go/bin/go install github.com/tomnomnom/gron@latest'",
 
         "echo 'Installing Gxss'",
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/KathanP19/Gxss@latest'",
@@ -223,12 +208,9 @@
 
         "echo 'Installing interactsh-client'",
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest'",
-        
+
         "echo 'Installing ipcdn'",
         "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/ipcdn/Dockerfile -t axiom/ipcdn'",
-
-        "echo 'Installing jaeles'",
-        "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/jaeles-project/jaeles@latest'",
 
         "echo 'Installing katana'",
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/projectdiscovery/katana/cmd/katana@latest'",
@@ -299,13 +281,13 @@
 
         "echo 'Installing testssl'",
         "git clone --depth 1 https://github.com/drwetter/testssl.sh.git /home/op/recon/testssl.sh",
-        
+
         "echo 'Installing tlsx'",
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/tlsx/cmd/tlsx@latest'",
-        
+
         "echo 'Installing trufflehog'",
         "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/trufflehog/Dockerfile -t axiom/trufflehog'",
-        
+
         "echo 'Installing unimap'",
         "wget -q -O /tmp/unimap https://github.com/Edu4rdSHL/unimap/releases/download/0.5.1/unimap-linux && mv /tmp/unimap /usr/bin/unimap && chmod +x /usr/bin/unimap",
 
@@ -320,7 +302,7 @@
 
         "echo 'Installing wpscan'",
         "gem install wpscan",
-        
+
         "echo 'Removing unneeded Docker images'",
         "/bin/su -l op -c 'docker image prune -f'",
 

@@ -55,6 +55,7 @@ then
                 brew install doctl
                 echo -e "${BGreen}Installing doctl packer plugin...${Color_Off}"
                 packer plugins install github.com/digitalocean/digitalocean
+                doctl auth init -t "$token" || bootstrap
             elif [[ $BASEOS == "Linux" ]]; then
                 OS=$(lsb_release -i | awk '{ print $3 }')
                 if ! command -v lsb_release &> /dev/null; then

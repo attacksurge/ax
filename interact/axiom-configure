@@ -12,7 +12,7 @@ cat << EOF
 ██║  ██║██╔╝ ██╗    ╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝╚██████╔╝██║  ██║███████╗
 ╚═╝  ╚═╝╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚══════╝
 
-Maintainer:@0xtavian
+Maintainer: 0xtavian
 
 EOF
 
@@ -51,7 +51,7 @@ function bash_shell(){
      echo "[[ -f ~/.bashrc ]] && . ~/.bashrc" >> "${HOME}"/.bash_profile
      source ~/.bashrc  >> /dev/null 2>&1
     else
-     echo -e "${BYellow}Do you want to install Golang 1.22.2? y/n ${Color_Off}"
+     echo -e -n "${BYellow}Do you want to install Golang 1.22.2? y/n: \n>> ${Color_Off}"
      read acc
      if [[ "$acc" == "y" ]]; then
       echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
@@ -100,7 +100,7 @@ function zsh_shell(){
      source "${HOME}"/.zshrc >> /dev/null 2>&1
      SHELL=$(which zsh)
     else
-     echo -e "${BYellow}Do you want to install Golang 1.22.2? y/n ${Color_Off}"
+     echo -e -n "${BYellow}Do you want to install Golang 1.22.2? y/n: \n>> ${Color_Off}"
      read acc
      if [[ "$acc" == "y" ]]; then
       echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
@@ -148,7 +148,7 @@ function omz_shell(){
      source "${HOME}"/.zshrc >> /dev/null 2>&1
      SHELL=$(which zsh)
     else
-     echo -e "${BYellow}Do you want to install Golang 1.22.2? y/n ${Color_Off}"
+     echo -e -n "${BYellow}Do you want to install Golang 1.22.2? y/n: \n>> ${Color_Off}"
      read acc
      if [[ "$acc" == "y" ]]; then
       echo -e "${BGreen}Installing Golang 1.22.2${Color_Off}"
@@ -302,7 +302,7 @@ if [[ $BASEOS == "Linux" ]]; then
     else
         OS=$(lsb_release -i | awk '{ print $3 }')
         if ! command -v lsb_release &> /dev/null; then
-            echo "WARNING: Unless using Ubuntu latest, this install might not work"
+            echo "${Yellow}WARNING: lsb_release not found. Unless using Ubuntu latest, this install might not work${Color_Off}"
             echo "lsb_release could not be found, unable to determine your distribution"
             OS="unknown-Linux"
             BASEOS="Linux"
@@ -310,7 +310,7 @@ if [[ $BASEOS == "Linux" ]]; then
     fi
     if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
         echo -e "${BGreen}Congrats, you run arch..."
-        echo -e "${BGreen}Installing other repo deps...${Color_Off}"
+        echo -e "${BGreen}Installing git ruby curl jq packer rsync...${Color_Off}"
         # Stated dependencies in the Github-wiki
         sudo pacman -Syu git ruby curl jq packer rsync --noconfirm
         # Other dependencies
@@ -328,7 +328,7 @@ if [[ $BASEOS == "Linux" ]]; then
         ln -fs /usr/share/zoneinfo/$(curl ipinfo.io/"$ip" | jq -r .timezone) /etc/localtime
         dpkg-reconfigure --frontend noninteractive tzdata
        fi
-        echo -e "${BGreen}Installing other repo deps...${Color_Off}"
+        echo -e "${BGreen}Installing fail2ban jq git ruby python3-pip curl iputils-ping net-tools unzip xsltproc bc rsync sudo wget nano bsdmainutils openssh-server...${Color_Off}"
         DEBIAN_FRONTEND=noninteractive sudo apt-get update && sudo apt-get install git ruby python3-pip curl iputils-ping net-tools unzip xsltproc bc rsync sudo wget nano bsdmainutils openssh-server fail2ban jq -y 
         echo -e "${BGreen}Installing packer...${Color_Off}"
         wget -q -O /tmp/packer.zip https://releases.hashicorp.com/packer/1.8.1/packer_1.8.1_linux_amd64.zip && cd /tmp/ && unzip packer.zip && sudo mv packer /usr/bin/ && rm /tmp/packer.zip 
@@ -338,7 +338,7 @@ if [[ $BASEOS == "Linux" ]]; then
         cd /tmp/interlace && sudo python3 setup.py install
 
         elif [[ $OS == "Fedora" ]]; then
-        echo -e "${BGreen}Installing other repo deps...${Color_Off}"
+        echo -e "${BGreen}Installing fail2ban mmv bc fzf git rubypick python3-pip curl net-tools unzip util-linux...${Color_Off}"
         sudo dnf update && sudo dnf -y install mmv bc fzf git rubypick python3-pip curl net-tools unzip util-linux fail2ban
         echo -e "${BGreen}Installing jq...${Color_Off}"
         sudo wget -q -O /usr/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 && sudo chmod +x /usr/bin/jq
@@ -378,19 +378,19 @@ if [[ $BASEOS == "Mac" ]]; then
           echo -e "${BGreen}Installing go...${Color_Off}"
           brew install golang 
         else
-          echo -e "${BYellow}Do you want to upgrade Python (brew install python3) y/n ${Color_Off}"
+          echo -e -n "${BYellow}Do you want to upgrade Python (brew install python3) y/n: \n>> ${Color_Off}"
           read acc
           if [[ "$acc" == "y" ]]; then 
            echo -e "${BGreen}Installing Python3...${Color_Off}"
            brew install python3
 	  fi
-           echo -e "${BYellow}Do you want to install setuptools? this will break system packages (pip3 install setuptools --break-system-packages)  y/n ${Color_Off}"
+           echo -e -n "${BYellow}Do you want to install setuptools? this will break system packages (pip3 install setuptools --break-system-packages)  y/n: \n>> ${Color_Off}"
            read acc
           if [[ "$acc" == "y" ]]; then
            echo -e "${BGreen}Installing setuptools...${Color_Off}"
            pip3 install setuptools --break-system-packages
           fi
-          echo -e "${BYellow}Do you want to install/update Go? (brew install golang) y/n ${Color_Off}"
+          echo -e -n "${BYellow}Do you want to install/update Go? (brew install golang) y/n: \n>> ${Color_Off}"
           read acc
           if [[ "$acc" == "y" ]]; then
            echo -e "${BGreen}Installing go...${Color_Off}"
@@ -419,7 +419,8 @@ zsh_shell
 else
 
 # Pick your shell
-echo -e "${BGreen}Choose bash/zsh to add Ax to .bashrc/.zshrc. OMZ installs Oh My Zsh and overwrites .zshrc${Color_Off}"
+echo -e "${BGreen}Choose bash/zsh to add Ax to .bashrc/.zshrc. OMZ installs Oh My Zsh and replaces .zshrc and .oh-my-zsh"
+echo -e "${BGreen}Whatever option you choose, we backup your config to ~/.\$shell-\$timestamp just in case${Color_Off}"
  PS3="Please select an option : "
   choices=("Bash" "Zsh" 'Oh My Zsh')
   select choice in "${choices[@]}"; do

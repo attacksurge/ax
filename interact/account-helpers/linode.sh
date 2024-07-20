@@ -32,7 +32,7 @@ esac
 
 function setuplinode(){
 echo -e "${BGreen}Sign up for an account using this link for \$100 free credit: https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d\nObtain a personal access token from: https://cloud.linode.com/profile/tokens${Color_Off}"
-echo -e -n "${Blue}Do you already have a Linode account? y/n ${Color_Off}"
+echo -e -n "${BGreen}Do you already have a Linode account? y/n ${Color_Off}"
 read acc 
 
 if [[ "$acc" == "n" ]]; then
