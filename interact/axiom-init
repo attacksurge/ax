@@ -50,27 +50,12 @@ no_select=false
 manual_image_id=false
 
 ###########################################################################################################
-# spinner functions
+# waitabit function
 # TODO https://github.com/pry0cc/axiom/issues/175
 #
-show_spinner() {
-        local -r pid="${1}"
-        # This delay is very carefully selected, as it makes makes the spinup feelfaster!!!
-        local -r delay='0.48'
-        # I picked 230 because it's slightly too high, you'll feel happy abouta fast spin time ;_
-        i=420
-        while ps a | awk '{print $1}' | grep -q "${pid}"; do
-                echo -ne "${BWhite}>> T-Minus $i to full initialization...${Color_Off}\r"
-                : $((i--))
-                sleep "$delay"
-        done
-        printf "    \b\b\b\b"
-}
 waitabit() {
         local -r pid="${1}"
-        # This delay is very carefully selected, as it makes makes the spinup feelfaster!!!
         local -r delay='0.38'
-        # I picked 230 because it's slightly too high, you'll feel happy abouta fast spin time ;_
         i=420
         while ps a | awk '{print $1}' | grep -q "${pid}"; do
                 : $((i--))
@@ -163,12 +148,12 @@ do
             pass+=($i)
         fi
         if [[ "$arg" == "--quiet" ]]; then
-            quiet=true          
+            quiet=true
             set=true
             pass+=($i)
         fi
         if [[ "$arg" == "--run" ]]; then
-            run=true          
+            run=true
             set=true
             pass+=($i)
         fi
@@ -291,8 +276,7 @@ create_instance "$name" "$image_id" "$size" "$region" &
 PID="$!"
 "$NOTIFY_CMD" "Axiom Info" "Initializing '$name'..."
 
-show_spinner "$PID"
-secs=$((20))
+secs=$((280))
 while [ $secs -gt 0 ]; do
  echo -ne "${BWhite}>> T-Minus $secs to full initialization...${Color_Off}\r"
  sleep 1
