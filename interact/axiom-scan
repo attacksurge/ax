@@ -112,7 +112,7 @@ OPTIMIZATIONS:
    --max-runtime DURATION[]    kill scan if still running after DURATION. DURATION is a floating point number with an optional suffix: 's' for seconds (the default), 'm' for minutes, 'h' for hours or 'd' for days.
    --preflight-timeout int[]   specifies the timeout (in seconds) used when connecting to the SSH server, instead of using the default 15 seconds
    --skip-preflight            do not automatically remove instances that can not be reached (default removes instances from the queue that can not be reached)
-   --anew                      pipe the output to anew before creating the final output file (requires Go install) (requires extension "ext":"txt" or "ext":"oG" to be in the module)
+   --anew                      pipe the output to anew before creating the final output file (also requires extension "ext":"txt", "ext":"oG" or "ext":"csv" to be in the module)
 
 OUTPUT:
    -o string[]          output as default (the first ext mentioned in the module)
@@ -367,10 +367,12 @@ merge_output() {
       mv "$outfile" "$outfile-$backup_timestamp"
      fi
      if ! [ -x "$(command -v anew)" ]; then
-      go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
+      if ! [ -x "$(command -v go)" ]; then
+       echo -e "${BGreen}Warning: anew not installed and neither is Golang (so we cant install anew). Defaulting to the module extension without using anew${Color_Off}"
+      else
+       go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
      fi
     fi
-
    if [[ "$ext" == "txt" ]] ; then
         echo "mode set to $ext.. combining results into one file."
         find $tmp/output/ -type f -exec cat {} \; > $tmp/merge
@@ -733,7 +735,7 @@ do
             pass+=($i)
             pass+=($n)
         fi
-       if [[ "$arg" == "--download" ]]; then
+        if [[ "$arg" == "--download" ]]; then
             n=$((i+1))
 	    download_user_arg=true
             download_file_path=$(echo ${!n})
@@ -741,7 +743,7 @@ do
             pass+=($i)
             pass+=($n)
         fi
-       if [[ "$arg" == "--upload" ]]; then
+        if [[ "$arg" == "--upload" ]]; then
             n=$((i+1))
             upload_user_arg=true
             upload_file_path=$(echo ${!n})
