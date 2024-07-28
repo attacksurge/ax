@@ -1,4 +1,6 @@
-[{
-	"command":"cat input | /home/op/go/bin/waybackurls | tee output",
-	"ext":"txt"
-}]
+[
+  {
+    "command": "cat input | /home/op/go/bin/waybackurls | tee output",
+    "ext": "txt"
+  }
+]

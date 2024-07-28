@@ -1,4 +1,6 @@
-[{
-	"command":"/usr/bin/kr scan input -o text | tee output",
-	"ext":"txt"
-}]
+[
+  {
+    "command": "/usr/bin/kr scan input -o text | tee output",
+    "ext": "txt"
+  }
+]

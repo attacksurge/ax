@@ -1,4 +1,6 @@
-[{
-	"command":"python3 /home/op/recon/waymore/waymore.py -mode U -i input | tee output",
-	"ext":"txt"
-}]
+[
+  {
+    "command": "python3 /home/op/recon/waymore/waymore.py -mode U -i input | tee output",
+    "ext": "txt"
+  }
+]

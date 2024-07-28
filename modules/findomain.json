@@ -1,4 +1,6 @@
-[{
-    "command":"/usr/bin/findomain -q -f input -u output",
-    "ext":"txt"
-}]
+[
+  {
+    "command": "/usr/bin/findomain -q -f input -u output",
+    "ext": "txt"
+  }
+]

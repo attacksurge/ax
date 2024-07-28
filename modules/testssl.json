@@ -1,4 +1,6 @@
-[{
-  "command":"/home/op/recon/testssl.sh/testssl.sh -U -iL input | tee output",
-  "ext":"txt"
-}]
+[
+  {
+    "command": "/home/op/recon/testssl.sh/testssl.sh -U -iL input | tee output",
+    "ext": "txt"
+  }
+]

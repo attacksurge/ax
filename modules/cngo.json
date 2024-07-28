@@ -1,4 +1,6 @@
-[{
-    "command":"/home/op/go/bin/cngo -f input | tee output",
-    "ext":"txt"
-}]
+[
+  {
+    "command": "/home/op/go/bin/cngo -f input | tee output",
+    "ext": "txt"
+  }
+]

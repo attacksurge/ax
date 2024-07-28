@@ -1,4 +1,6 @@
-[{
-	"command":"http2smugl detect --targets input --csv-log output",
-	"ext":"csv"
-}]
+[
+  {
+    "command": "http2smugl detect --targets input --csv-log output",
+    "ext": "csv"
+  }
+]

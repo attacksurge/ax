@@ -1,4 +1,6 @@
-[{
-	"command":"cat input | /home/op/go/bin/gospider -S - -v -o output",
-	"ext":""
-}]
+[
+  {
+    "command": "cat input | /home/op/go/bin/gospider -S - -v -o output",
+    "ext": ""
+  }
+]
