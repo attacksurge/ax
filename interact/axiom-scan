@@ -116,6 +116,7 @@ OPTIMIZATIONS:
 OUTPUT:
    -anew string[]       pipe the output to anew before creating the final output file (requires Go install)
    -o string[]          output as default (the first ext mentioned in the module)
+   -oT/-txt string[]    output as text (must also be supplied in the module using "ext":"txt")
    -oD/-oA string[]     output as directory (must also be supplied in the module using "ext":"dir" or "ext":"")
    -oG string[]         output as greppable, merge and sort unique (must also be supplied in the module using "ext":"oG")
    -oJ string[]         output as json lines, newline characters are used to delimit JSON data (must also be supplied in the module using "ext":"jsonl")
@@ -360,15 +361,26 @@ do
 #
 merge_output() {
     if [[ "$anew" != "true" ]];  then
-     if [ -f "$outfile" ] ; then
-      rm -rf "$outfile"
+     if [ -e "$outfile" ]; then
+      backup_timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+      echo -e "${BGreen}File or folder already exists at "$outfile".. backing up to "$outfile-$backup_timestamp" just in case.${Color_Off}"
+      mv "$outfile" "$outfile-$backup_timestamp"
      fi
      if ! [ -x "$(command -v anew)" ]; then
       go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
      fi
     fi
 
-   if [[ "$ext" == "txt" ]] || [[ "$ext" == "jsonl" ]]; then
+   if [[ "$ext" == "txt" ]] ; then
+        echo "mode set to $ext.. combining results into one file."
+        find $tmp/output/ -type f -exec cat {} \; > $tmp/merge
+        output_lines=$(wc -l $tmp/merge | tr -s ' ' | cut -d ' ' -f 1)
+        if [[ "$anew" == "true" ]]; then
+            cat "$tmp/merge" | anew "$outfile"
+        else
+            mv "$tmp/merge" "$outfile"
+        fi
+   elif [[ "$ext" == "oG" ]] || [[ "$ext" == "jsonl" ]]; then
         echo "mode set to $ext.. sorting unique."
         find $tmp/output/ -type f -exec cat {} \; | sort -u > $tmp/merge
         output_lines=$(wc -l $tmp/merge | tr -s ' ' | cut -d ' ' -f 1)
@@ -377,38 +389,29 @@ merge_output() {
         else
             mv "$tmp/merge" "$outfile"
         fi
-    elif [[ "$ext" == "xml" ]]; then
+   elif [[ "$ext" == "xml" ]]; then
         echo "Mode set to XML.. Merging Nmap XML output..."
         mkdir $tmp/merge
         find $tmp/output -type f -print0 | xargs -0 -I{} cp --backup=t {} $tmp/merge
         output_lines=$(ls $tmp/merge | wc -l)
-        if [ -f "$outfile" ] ; then
-         rm -rf "$outfile"
-        fi
         "$AXIOM_PATH/interact/nMap_Merger.py" -d "$tmp/merge" -o "$tmp/merge.xml" >> /dev/null
         mv "$tmp/merge.xml" "$outfile"
         mv "$tmp/merge.xml.html" "$outfile.html"
-    elif [[ "$ext" == "csv" ]]; then
+  elif [[ "$ext" == "csv" ]]; then
         echo "Mode set to CSV, merging..."
         header="$(find $tmp/output/ -type f -exec head -n 1 {} \; | sort -u )"
         echo "$header" > "$outfile"
         find $tmp/output/ -type f -exec cat {} \; | grep -v "$header" | sort -u -V >> "$outfile"
         output_lines=$(wc -l $outfile | tr -s ' ' | cut -d ' ' -f 1)
-    elif [[ "$ext" == "none" ]]; then
+  elif [[ "$ext" == "none" ]]; then
         echo "Mode set to none, not merging..."
-        if [ -f "$outfile" ] ; then
-         rm -rf "$outfile"
-        fi
         mv $tmp/output "$outfile"        
         output_lines=$(ls $outfile | wc -l)
-    elif [[ "$ext" == "" ]] || [[ "$ext" == "dir" ]];  then
+  elif [[ "$ext" == "" ]] || [[ "$ext" == "dir" ]];  then
         echo "Mode set to directory... Merging directories..."
         mkdir $tmp/merge
         find $tmp/output -type f -print0 | xargs -0 -I{} cp --backup=t {} $tmp/merge
         output_lines=$(ls $tmp/merge | wc -l)
-        if [ -f "$outfile" ] ; then
-         rm -rf "$outfile"
-        fi
         mv $tmp/merge "$outfile"
         if [[ "$module" == "gowitness" ]]; then
          if ! [ -x "$(command -v gowitness)" ]; then
@@ -499,20 +502,26 @@ do
             pass+=($i)
             pass+=($n)
         fi
+        if [[ "$arg" == "-oT" ]] || [[ "$arg" == "-txt" ]]; then
+            n=$((i+1))
+            ext="txt"
+            outfile=$(echo ${!n})
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
         if [[ "$arg" == "-oJ" ]]; then
             n=$((i+1))
             ext="jsonl"
             outfile=$(echo ${!n})
-            echo "using JSONL as extention for: '$outfile'"
             set=true
             pass+=($i)
             pass+=($n)
         fi
         if [[ "$arg" == "-oG" ]]; then
             n=$((i+1))
-            ext="txt"
+            ext="oG"
             outfile=$(echo ${!n})
-            echo "sorting and greping unique for: '$outfile'"
             set=true
             pass+=($i)
             pass+=($n)
@@ -521,7 +530,6 @@ do
             n=$((i+1))
             ext="csv"
             outfile=$(echo ${!n})
-            echo "using csv as extention for: '$outfile'"
             set=true
             pass+=($i)
             pass+=($n)
@@ -530,7 +538,6 @@ do
             n=$((i+1))
             ext="xml"
             outfile=$(echo ${!n})
-            echo "using xml as extention for: '$outfile'"
             set=true
             pass+=($i)
             pass+=($n)
@@ -539,7 +546,6 @@ do
             n=$((i+1))
             ext="dir"
             outfile=$(echo ${!n})
-            echo "setting output directory to: '$outfile'"
             set=true
             pass+=($i)
             pass+=($n)
@@ -548,7 +554,6 @@ do
             n=$((i+1))
             anew="true"
             outfile=$(echo ${!n})
-            echo "sending output file to anew when completed"
             set=true
             pass+=($i)
             pass+=($n)
@@ -557,7 +562,6 @@ do
             n=$((i+1))
             ext="none"
             outfile=$(echo ${!n})
-            echo "using 'none' type for merging file: '$outfile'"
             set=true
             pass+=($i)
             pass+=($n)

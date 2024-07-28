@@ -1,7 +1,11 @@
 [
   {
-    "command": "sudo nmap -iL input -oG output",
+    "command": "sudo nmap -iL input -oN output",
     "ext": "txt"
+  },
+  {
+    "command": "sudo nmap -iL input -oG output",
+    "ext": "oG"
   },
   {
     "command": "sudo nmap -iL input -oX output",
