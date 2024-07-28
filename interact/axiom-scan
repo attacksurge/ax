@@ -374,21 +374,21 @@ merge_output() {
    if [[ "$ext" == "txt" ]] ; then
         echo "mode set to $ext.. combining results into one file."
         find $tmp/output/ -type f -exec cat {} \; > $tmp/merge
-        output_lines=$(wc -l $tmp/merge | tr -s ' ' | cut -d ' ' -f 1)
         if [[ "$anew" == "true" ]]; then
             cat "$tmp/merge" | anew "$outfile"
         else
             mv "$tmp/merge" "$outfile"
         fi
+        output_lines=$(wc -l $outfile | tr -s ' ' | cut -d ' ' -f 1)
    elif [[ "$ext" == "oG" ]] || [[ "$ext" == "jsonl" ]]; then
         echo "mode set to $ext.. sorting unique."
         find $tmp/output/ -type f -exec cat {} \; | sort -u > $tmp/merge
-        output_lines=$(wc -l $tmp/merge | tr -s ' ' | cut -d ' ' -f 1)
         if [[ "$anew" == "true" ]]; then
             cat "$tmp/merge" | anew "$outfile"
         else
             mv "$tmp/merge" "$outfile"
         fi
+        output_lines=$(wc -l $outfile | tr -s ' ' | cut -d ' ' -f 1)
    elif [[ "$ext" == "xml" ]]; then
         echo "Mode set to XML.. Merging Nmap XML output..."
         mkdir $tmp/merge
@@ -400,12 +400,17 @@ merge_output() {
   elif [[ "$ext" == "csv" ]]; then
         echo "Mode set to CSV, merging..."
         header="$(find $tmp/output/ -type f -exec head -n 1 {} \; | sort -u )"
-        echo "$header" > "$outfile"
-        find $tmp/output/ -type f -exec cat {} \; | grep -v "$header" | sort -u -V >> "$outfile"
+        echo "$header" > $tmp/merge
+        find $tmp/output/ -type f -exec cat {} \; | grep -v "$header" | sort -u -V >> $tmp/merge
+        if [[ "$anew" == "true" ]]; then
+            cat "$tmp/merge" | anew "$outfile"
+        else
+            mv "$tmp/merge" "$outfile"
+        fi
         output_lines=$(wc -l $outfile | tr -s ' ' | cut -d ' ' -f 1)
   elif [[ "$ext" == "none" ]]; then
         echo "Mode set to none, not merging..."
-        mv $tmp/output "$outfile"        
+        mv $tmp/output "$outfile"
         output_lines=$(ls $outfile | wc -l)
   elif [[ "$ext" == "" ]] || [[ "$ext" == "dir" ]];  then
         echo "Mode set to directory... Merging directories..."
