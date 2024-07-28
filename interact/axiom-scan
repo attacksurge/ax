@@ -79,9 +79,9 @@ Usage:
    axiom-scan inputfile.txt -m ffuf -wD /home/localuser/local-wordlist-to-split-and-upload
    axiom-scan inputfile.txt -m nuclei -w /home/op/nuclei-templates-on-remote-instances -o outputfile.txt
    axiom-scan inputfile.txt -m nuclei --nuclei-templates /home/localuser/local-custom-nuclei-template-folder-to-upload/ -o outputfile.txt
-   axiom-scan inputfile.txt -m nuclei --local-config /home/localuser/local-custom-nuclei-config-file-to-upload.yaml -anew outputfile.txt
+   axiom-scan inputfile.txt -m nuclei --local-config /home/localuser/local-custom-nuclei-config-file-to-upload.yaml -o outputfile.txt --anew
    axiom-scan inputfile.txt -m gowitness -oD screenshots-folder --spinup 10 --rm-when-done
-   axiom-scan inputfile.txt -m nmapx -p- -sV -T4 -v --open -oA nampx-scan --spinup 100 --rm-when-done --regions dal13,lon06,fra05,sjc04 
+   axiom-scan inputfile.txt -m nmapx -p- -sV -T4 -v --open -oA nampx-scan --spinup 100 --rm-when-done --regions dal13,lon06,fra05,sjc04
 
 Flags:
 INPUT:
@@ -112,9 +112,9 @@ OPTIMIZATIONS:
    --max-runtime DURATION[]    kill scan if still running after DURATION. DURATION is a floating point number with an optional suffix: 's' for seconds (the default), 'm' for minutes, 'h' for hours or 'd' for days.
    --preflight-timeout int[]   specifies the timeout (in seconds) used when connecting to the SSH server, instead of using the default 15 seconds
    --skip-preflight            do not automatically remove instances that can not be reached (default removes instances from the queue that can not be reached)
+   --anew                       pipe the output to anew before creating the final output file (requires Go install)
 
 OUTPUT:
-   -anew string[]       pipe the output to anew before creating the final output file (requires Go install)
    -o string[]          output as default (the first ext mentioned in the module)
    -oT/-txt string[]    output as text (must also be supplied in the module using "ext":"txt")
    -oD/-oA string[]     output as directory (must also be supplied in the module using "ext":"dir" or "ext":"")
@@ -551,12 +551,9 @@ do
             pass+=($n)
         fi 
         if [[ "$arg" == "-anew" ]] || [[ "$arg" == "--anew" ]] ; then
-            n=$((i+1))
             anew="true"
-            outfile=$(echo ${!n})
             set=true
             pass+=($i)
-            pass+=($n)
         fi
         if [[ "$arg" == "-none" ]] || [[ "$arg" == "--none" ]] ; then
             n=$((i+1))
