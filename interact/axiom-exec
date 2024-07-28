@@ -36,7 +36,7 @@ instance=false
 keep_logs=false
 quick_execution=false
 pre_flight=true
-preflight_timeout=5
+preflight_timeout=10
 
 ###########################################################################################################
 # Help Menu:
