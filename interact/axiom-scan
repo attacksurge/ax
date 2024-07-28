@@ -449,8 +449,8 @@ cache="false"
 fleet=""
 threads=""
 interactive=""
-uid="$module+$(date +%s)$RANDOM"
-outfile="$start/scan+$(date +%s)"
+uid="$module+$(date +%m-%d_%H-%M-%S-%1N)"
+outfile="$start/scan+$(date +%m-%d_%H-%M-%S-%1N)"
 sshconfig="$AXIOM_PATH/.sshconfig"
 rm_when_done="false"
 spinup=0
@@ -847,7 +847,8 @@ fi
 ###########################################################################################################
 #  Create temporary directories and set tmp path to be used for logs
 #
-uid="$module+$(date +%s)$RANDOM"
+uid="$module+$(date +%m-%d_%H-%M-%S-%1N)"
+outfile="$start/$module+$(date +%m-%d_%H-%M-%S-%1N)"
 tmp="$AXIOM_PATH/tmp/$uid"
 completed="$AXIOM_PATH/tmp/$uid/status/completed/"
 inprogress="$AXIOM_PATH/tmp/$uid/status/inprogress/"
@@ -912,7 +913,7 @@ socket_tmp=$(echo "$AXIOM_PATH/tmp/$uid/sockets")
 cat <<EOT >> $(echo $sshconfig)
 Host * 
     ControlMaster auto 
-    ControlPath $socket_tmp/%r@%h-%p  
+    ControlPath $socket_tmp/%h
     ControlPersist 600
     ConnectTimeout 10
 EOT

@@ -267,7 +267,7 @@ socket_tmp=$(echo "$tmp/sockets")
 cat <<EOT >> $(echo $sshconfig)
 Host * 
     ControlMaster auto 
-    ControlPath $socket_tmp/%r@%h-%p  
+    ControlPath $socket_tmp/%h
     ControlPersist 600
 EOT
 
