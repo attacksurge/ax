@@ -8,7 +8,7 @@
 "sudo apt --fix-broken install -qq",
 "sudo apt install tightvncserver -y -qq",
 "mkdir -p /home/op/.vnc/",
-"curl -sL https://raw.githubusercontent.com/pry0cc/axiom/master/configs/xstartup > /home/op/.vnc/xstartup",
+"curl -sL https://raw.githubusercontent.com/attacksurge/ax/main/configs/xstartup > /home/op/.vnc/xstartup",
 "sudo chmod +x /home/op/.vnc/xstartup",
 "echo $(cat /dev/urandom| base64 | tr -d '+=-' | tr -d '\n' | tr -d / | head -c 8) | tee /home/op/vncpass | vncpasswd -f | sudo tee /home/op/.vnc/passwd > /dev/null",
 "sudo chown -R op:op /home/op/.vnc",
