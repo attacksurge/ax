@@ -451,7 +451,7 @@ fleet=""
 threads=""
 interactive=""
 uid="$module+$(date +%m-%d_%H-%M-%S-%1N)"
-outfile="$start/scan+$(date +%m-%d_%H-%M-%S-%1N)"
+#outfile="$start/scan+$(date +%m-%d_%H-%M-%S-%1N)"
 sshconfig="$AXIOM_PATH/.sshconfig"
 rm_when_done="false"
 spinup=0
@@ -848,8 +848,10 @@ fi
 ###########################################################################################################
 #  Create temporary directories and set tmp path to be used for logs
 #
-uid="$module+$(date +%m-%d_%H-%M-%S-%1N)"
+if [ -z "$outfile" ] ; then
 outfile="$start/$module+$(date +%m-%d_%H-%M-%S-%1N)"
+fi
+uid="$module+$(date +%m-%d_%H-%M-%S-%1N)"
 tmp="$AXIOM_PATH/tmp/$uid"
 completed="$AXIOM_PATH/tmp/$uid/status/completed/"
 inprogress="$AXIOM_PATH/tmp/$uid/status/inprogress/"
