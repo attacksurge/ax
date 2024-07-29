@@ -365,13 +365,13 @@ merge_output() {
       backup_timestamp=$(date +%Y-%m-%d_%H-%M-%S)
       echo -e "${BGreen}File or folder already exists at "$outfile".. backing up to "$outfile-$backup_timestamp" just in case.${Color_Off}"
       mv "$outfile" "$outfile-$backup_timestamp"
-     else
-      if ! [ -x "$(command -v anew)" ]; then
-       if ! [ -x "$(command -v go)" ]; then
-        echo -e "${BRed}Warning: anew not installed and neither is Golang (so we cant install anew). Defaulting to the module extension without using anew${Color_Off}"
-       else
-        go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
-       fi
+     fi
+    else 
+     if ! [ -x "$(command -v anew)" ]; then
+      if ! [ -x "$(command -v go)" ]; then
+       echo -e "${BRed}Warning: anew not installed and neither is Golang (so we cant install anew). Defaulting to the module extension without using anew${Color_Off}"
+      else
+       go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
       fi
      fi
     fi
