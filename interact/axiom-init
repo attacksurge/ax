@@ -314,5 +314,5 @@ echo "{\"init\":\"$name\",\"ip\":\"$ip\",\"time\":\"$starttime\",\"region\":\"$r
 #
 if [[ $shell == "true" ]];
 then
-    axiom-ssh $name
+    axiom-ssh $name  -o StrictHostKeyChecking=no
 fi

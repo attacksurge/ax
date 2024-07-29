@@ -93,7 +93,8 @@
         "echo 'Installing Tools'",
 
         "echo 'Installing assetfinder'",
-        "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/assetfinder/Dockerfile -t axiom/assetfinder'",
+
+        "/bin/su -l op -c '/usr/local/go/bin/go install github.com/tomnomnom/assetfinder@latest'",
 
         "echo 'Installing Amass'",
         "wget -q -O /tmp/amass.zip https://github.com/OWASP/Amass/releases/download/v3.21.2/amass_linux_amd64.zip && cd /tmp/ && unzip /tmp/amass.zip && mv /tmp/amass_linux_amd64/amass /usr/bin/amass",
@@ -168,7 +169,7 @@
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/interactsh/cmd/interactsh-client@latest'",
 
         "echo 'Installing ipcdn'",
-        "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/ipcdn/Dockerfile -t axiom/ipcdn'",
+        "/bin/su -l op -c '/usr/local/go/bin/go install -v github.com/six2dez/ipcdn@latest'",
 
         "echo 'Installing katana'",
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/projectdiscovery/katana/cmd/katana@latest'",
@@ -223,7 +224,7 @@
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/tlsx/cmd/tlsx@latest'",
 
         "echo 'Installing trufflehog'",
-        "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/trufflehog/Dockerfile -t axiom/trufflehog'",
+        "/bin/su -l op -c 'curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin'",
 
         "echo 'Installing waybackurls'",
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/tomnomnom/waybackurls@latest'",
