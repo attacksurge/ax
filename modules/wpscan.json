@@ -1,6 +1,6 @@
 [
   {
-    "command": "/usr/local/bin/wpscan --url _cleantarget_ -f cli-no-colour -o output/_cleantarget_ ",
+    "command": "/usr/local/bin/wpscan --url _target_ -f cli-no-colour -o output/_cleantarget_ ",
     "ext": "dir",
     "threads": "1"
   }

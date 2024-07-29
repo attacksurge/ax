@@ -1,6 +1,6 @@
 [
   {
-    "command": "docker run -t --rm -i --mount type=bind,source=\"$(pwd)\",target=/data axiom/linkfinder -d -i _cleantarget_ -o cli | tee -a output/_cleantarget_",
+    "command": "docker run -t --rm -i --mount type=bind,source=\"$(pwd)\",target=/data axiom/linkfinder -d -i _target_ -o cli | tee -a output/_cleantarget_",
     "ext": "dir",
     "threads": "3"
   }

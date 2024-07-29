@@ -1,6 +1,6 @@
 [
   {
-    "command": "docker run -it -v \"$PWD:/pwd\" axiom/trufflehog github --org=_cleantarget_ | tee output/_cleantarget_",
+    "command": "docker run -it -v \"$PWD:/pwd\" axiom/trufflehog github --org=_target_ | tee output/_cleantarget_",
     "ext": "dir",
     "threads": "1"
   }
