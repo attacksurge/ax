@@ -19,14 +19,14 @@ current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut
 
 
 function usage() {
-  cat << EOF
-  Usage: axiom-power on 'rez\*'  #turns on instances starting with 'rez'
-         axiom-power off '\*'    #turns off all instances
-  Examples:
-  on                             Power on instance by instance name
-  off                           Power off instance by instance name 
-  reboot                           Reboot instance by instance name
-  help | --help | -h                           Print this help menu
+cat << EOF
+Usage: axiom-power on 'rez\*' # turns on instances starting with 'rez' 
+       axiom-power off '\*'   # turns off all instances
+Examples:
+on                             Power on instance by instance name
+off                           Power off instance by instance name 
+reboot                           Reboot instance by instance name
+help | --help | -h                           Print this help menu
 EOF
 exit
 }
