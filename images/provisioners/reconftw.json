@@ -209,7 +209,6 @@
         "/bin/su -l op -c 'go install github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest'",
         
         "/bin/su -l root -c 'apt-get clean'",
-        "echo \"The password for user op is: {{ user `op_random_password` }}\"",
         "touch /home/op/.z",
         "chown -R op:users /home/op",
         "chown root:root /etc/sudoers /etc/sudoers.d -R"

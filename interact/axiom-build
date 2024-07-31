@@ -276,31 +276,36 @@ fi
 echo -e "${Green}If this build completes successfully, the following updated axiom.json data will be stored in $account_path${Color_Off}"
 
 if [[ "$provider" == "aws" ]]; then
-cat "$account_path" | jq '.aws_secret_access_key = "*************************************"'| \
- jq '.imageid = "'$snapshot_name'"' | jq '.op = "'$op_ssh_password'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
+ cat "$account_path" | jq '.aws_secret_access_key = "*************************************"'| \
+ jq '.op = "***************************************************************************************************************************"' | 
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 
 fi
 
 if [[ "$provider" == "azure" ]]; then
-cat "$account_path" | jq '.client_secret = "*************************************"'| \
- jq '.imageid = "'$snapshot_name'"' | jq '.op = "'$op_ssh_password'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
+ cat "$account_path" | jq '.client_secret = "*************************************"'| \
+ jq '.op = "***************************************************************************************************************************"' | 
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 
 fi
 
 if [[ "$provider" == "do" ]]; then
-cat "$account_path" | jq '.do_key = "************************************************************************"'| \
- jq '.imageid = "'$snapshot_name'"' | jq '.op = "'$op_ssh_password'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
+ cat "$account_path" | jq '.do_key = "************************************************************************"'| \
+ jq '.op = "***************************************************************************************************************************"' | \
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 fi
 
 if [[ "$provider" == "ibm" ]]; then
-cat "$account_path" | jq '.sl_key = "************************************************************************" | .ibm_cloud_api_key = "***************************************"'| \
- jq '.imageid = "'$snapshot_name'"' | jq '.op = "'$op_ssh_password'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
+ cat "$account_path" | jq '.sl_key = "************************************************************************" | .ibm_cloud_api_key = "***************************************"'| \
+ jq '.op = "***************************************************************************************************************************"' | 
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 
 fi
 
 if [[ "$provider" == "linode" ]]; then
-cat "$account_path" | jq '.linode_key = "*******************************************************"'| \
- jq '.imageid = "'$snapshot_name'"' | jq '.op = "'$op_ssh_password'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
+ cat "$account_path" | jq '.linode_key = "*******************************************************"'| \
+ jq '.op = "***************************************************************************************************************************"' | 
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 fi
 
 ############################################################################################################
