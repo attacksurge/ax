@@ -78,8 +78,8 @@ Usage:
    axiom-scan inputfile.txt -m ffuf -w /home/op/wordlist-on-remote-instance
    axiom-scan inputfile.txt -m ffuf -wL /home/localuser/local-wordlist-to-upload
    axiom-scan inputfile.txt -m ffuf -wD /home/localuser/local-wordlist-to-split-and-upload
-   axiom-scan inputfile.txt -m nuclei -w /home/op/nuclei-templates-on-remote-instances -o outputfile.txt
-   axiom-scan inputfile.txt -m nuclei --nuclei-templates /home/localuser/local-custom-nuclei-template-folder-to-upload/ -o outputfile.txt
+   axiom-scan inputfile.txt -m nuclei --remote-folder /home/op/nuclei-templates-on-remote-instances -o outputfile.txt
+   axiom-scan inputfile.txt -m nuclei --local-folder /home/localuser/local-custom-nuclei-template-folder-to-upload/ -o outputfile.txt
    axiom-scan inputfile.txt -m nuclei --local-config /home/localuser/local-custom-nuclei-config-file-to-upload.yaml -o outputfile.txt --anew
    axiom-scan inputfile.txt -m gowitness -oD screenshots-folder --spinup 10 --rm-when-done
    axiom-scan inputfile.txt -m nmapx -p- -sV -T4 -v --open -oA nampx-scan --spinup 100 --rm-when-done --regions dal13,lon06,fra05,sjc04
@@ -99,7 +99,10 @@ WORDLIST:
    -w string[]                           replace _wordlist_ in module with user-provided wordlist (must be a path to a remote wordlist)
    -wD,--distribute-wordlist string[]    replace _wordlist_ in module with user-provided local wordlist to split and upload (default does not split the wordlist)
    -wL,--local-wordlist string[]         replace _wordlist_ in module with user-provided local wordlist (must be a path to a local wordlist)
-   --nuclei-templates string[]           replace _wordlist_ in module with user-provided local folder
+
+FOLDER:
+   --remote-folder string[]              replace _folder_ in module with user-provided remote folder (must be a path to a remote folder)
+   --local-folder string[]               replace _folder_ in module with user-provided local folder to upload (must be a path to a local folder)
 
 CONFIGURATIONS:
    --config string[]           replace _config_ in module with user-provided configuration file (must be a configuration file on the remote instances)
@@ -113,7 +116,7 @@ ONE-SHOT:
 OPTIMIZATIONS:
    --upload string[]           before the scan, upload a file to the unique scan working directory (/home/op/scan/\$module+\$timestamp) on remote instances (must be a path to a local file)
    --download string[]         after the scan, download a file from the unique scan working directory (/home/op/scan/\$module+\$timestamp) on remote instances (must be a path to a remote file)
-   --max-runtime DURATION[]    kill scan if still running after DURATION. DURATION is a floating point number with an optional suffix: 's' for seconds (the default), 'm' for minutes, 'h' for hours or 'd' for days.
+   --max-runtime DURATION[]    kill scan if still running after DURATION, DURATION is a floating point number with an required suffix: 'm' for minutes, 'h' for hours or 'd' for days
    --preflight-timeout int[]   specifies the timeout (in seconds) used when connecting to the SSH server, instead of using the default 15 seconds
    --skip-preflight            do not automatically remove instances that can not be reached (default removes instances from the queue that can not be reached)
    --anew                      pipe the output to anew before creating the final output file (also requires extension "ext":"txt", "ext":"oG" or "ext":"csv" to be in the module)
@@ -238,7 +241,7 @@ if [[ "$1" != "all" ]]; then
    ls | grep -v output | xargs rm -r >/dev/null 2>&1
    cd "$start"
   else
-    echo "error: local log folder does not exist."
+    echo "${Red}error: local log folder does not exist.${Color_Off}"
   fi
 else
  echo -e "${BBlue}deleting remote logs in a backgroud job${Color_Off}"
@@ -251,7 +254,7 @@ else
    ls | xargs rm -r >/dev/null 2>&1
    cd "$start"
   else
-    echo "error: local log folder does not exist."
+    echo "${Red}error: local log folder does not exist.${Color_Off}"
   fi
 fi
 }
@@ -281,6 +284,20 @@ apply_config() {
      echo "$command" | sed "s/_config_/$config_escaped/g"
     else
      echo "$command" | sed "s/$/ $config_escaped/g"
+    fi
+}
+
+###########################################################################################################
+#  Providing a folder in modules can be done with _folder_, Think of this like a placeholder/variable replacement for a path to a folder
+#
+apply_folder() {
+    command="$1"
+    folder="$2"
+    folder_escaped="$(echo "$folder" | sed 's/\//\\\//g')"
+    if [[ "$command" =~ "_folder_" ]] ; then
+     echo "$command" | sed "s/_folder_/$folder_escaped/g"
+    else
+     echo "$command" | sed "s/$/ $folder_escpaed/g"
     fi
 }
 
@@ -469,7 +486,8 @@ split="true"
 disable_oneshot="false"
 distribute_wordlist="false"
 quiet="false"
-nuclei_templates="false"
+local_folder="false"
+user_specified_folder="false"
 user_specified_config="false"
 local_config="false"
 pre_flight=true
@@ -649,9 +667,16 @@ do
             pass+=($i)
             pass+=($n)
         fi
-        if [[ "$arg" == "--nuclei-templates" ]]; then
+        if [[ "$arg" == "--nuclei-templates" ]] || [[ "$arg" == "--local-folder" ]]; then
             n=$((i+1))
-            nuclei_templates=$(echo ${!n})
+            local_folder=$(echo ${!n})
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$arg" == "--remote-folder" ]]; then
+            n=$((i+1))
+            user_specified_folder=$(echo ${!n})
             set=true
             pass+=($i)
             pass+=($n)
@@ -842,7 +867,7 @@ fi
 #  Exit if module doesnt exist
 #
 if [ ! -f $AXIOM_PATH/modules/$module.json ]; then
- echo -e "${Red}ERROR: Axiom module not found."
+ echo -e "${Red}ERROR: Axiom module not found.${Color_Off}"
  echo -e "Ensure module exists in $AXIOM_PATH/modules/$module.json"
  echo -e "To print all available modules run axiom-scan --list"
  exit 1
@@ -955,7 +980,7 @@ fi
 #  Check is input file is empty
 #
 if [[ "$lines" -eq "0" ]]; then
-   echo "error input file is empty, exiting";
+   echo "${Red}error input file is empty, exiting${Color_Off}";
    exit;
 fi
 
@@ -1008,8 +1033,8 @@ preflight_function
 #  Check total instances does not equal zero
 #
 if [[ "$total_instances" -eq "0" ]]; then
-   echo "error with number of instances, do you have instances selected? (axiom-select)"
-   echo "exiting..";
+   echo "${Red}error with number of instances, do you have instances selected? (axiom-select)"
+   echo "exiting..${Color_Off}";
    exit;
 fi
 
@@ -1047,6 +1072,24 @@ if [[ "$distribute_wordlist" != "false" ]]; then
         exit 1
     fi
 fi
+
+###########################################################################################################
+#  Figure out what folder to use
+#
+folder="$(parse_module "$module" "$ext" |  jq -r '.folder // empty')"
+if [[ "$remote_folder" != "false" ]]; then
+    folder="$user_specified_folder"
+fi
+if [[ "$local_folder" != "false" ]]; then
+    if [[ -d "$local_folder" ]]; then
+        local_folder_filename="$(echo "$local_folder" | tr '/' ' ' | awk '{ print $NF }')"
+        destination_folder="/home/op/scan/$uid/$local_folder_filename"
+        folder="$destination_folder"
+    else
+        echo -e "${Red}Error: local folder not found '$local_folder'...${Color_Off}"
+        exit 1
+    fi
+fi 
 
 ###########################################################################################################
 #  Figure out what config to use
@@ -1124,15 +1167,15 @@ if [[ "$distribute_wordlist" != "false" ]]; then
 fi
 
 ###########################################################################################################
-#  If --nuclei-templates is present in the command line, upload a user provider folder to use.
+#  If --local-folder is present in the command line, upload a user provider folder to use.
 #
-if [[ "$nuclei_templates" != "false" ]]; then
-if [[ -d "$nuclei_templates" ]]; then
-        local_folder_filename="$(echo "$nuclei_templates" | tr '/' ' ' | awk '{ print $NF }')"
+if [[ "$local_folder" != "false" ]]; then
+if [[ -d "$local_folder" ]]; then
+        local_folder_filename="$(echo "$local_folder" | tr '/' ' ' | awk '{ print $NF }')"
         destination_folder="/home/op/scan/$uid/$local_folder_filename"
-        wordlist="$destination_folder"
-        echo -e "${BGreen}uploading local folder ( nuclei-templates )${Color_Off}${BBlue} : $nuclei_templates${Color_Off} to ${BBlue}$destination_folder...${Color_Off}"
-        interlace --no-bar --silent -threads $total_instances -tL "$tmp/selected.conf" -c "$AXIOM_PATH/interact/axiom-scp $nuclei_templates _target_:$destination_folder --cache -F=$sshconfig >> /dev/null"
+        folder="$destination_folder"
+        echo -e "${BGreen}uploading local folder ${Color_Off}: ${BBlue} $local_folder${Color_Off} to ${BBlue}$destination_folder...${Color_Off}"
+        interlace --no-bar --silent -threads $total_instances -tL "$tmp/selected.conf" -c "$AXIOM_PATH/interact/axiom-scp $local_folder _target_:$destination_folder/ --cache -F=$sshconfig >> /dev/null"
         echo -e "${Green}custom folder uploaded successfully!${Color_Off}"
 fi
 fi
@@ -1169,8 +1212,12 @@ fi
 #
 [[ ! -z "$args" ]] && command="$(add_extra_args "$command" "$args")"
 
-if [[ "$command" =~ "_wordlist_" ]] ||  [[ "$local_wordlist" != "false" ]] || [[ "$nuclei_templates" != "false" ]] || [[ "$distribute_wordlist" != "false" ]]; then
+if [[ "$command" =~ "_wordlist_" ]] ||  [[ "$local_wordlist" != "false" ]] || [[ "$distribute_wordlist" != "false" ]]; then
 command="$(apply_wordlist "$command" "$wordlist")"
+fi
+
+if [[ "$command" =~ "_folder_" ]] ||  [[ "$local_folder" != "false" ]]; then
+command="$(apply_folder "$command" "$folder")"
 fi
 
 if [[ "$command" =~ "_config_" ]] ||  [[ "$local_config" != "false" ]]; then
