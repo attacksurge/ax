@@ -73,6 +73,7 @@ Linode is an absoutely fantastic cloud provider and highly supported! If you're 
 </p>
 
 # Installation
+The machine you install Ax on is called the [Ax Controller](https://ax-framework.gitbook.io/wiki/overview/ax-controller). The Controller manages all aspects of Ax, including account setup, building your Packer image, spinning up and SSHing into instances, creating new images from existing instances, deleting instances and images, managing distributed scanning, and much more!
 ## Docker
 
 This will create a docker container, initiate [`axiom-configure`](https://ax-framework.gitbook.io/wiki/fundamentals/ax-utility-scripts#ax-configure) and [`axiom-build`](https://ax-framework.gitbook.io/wiki/fundamentals/ax-utility-scripts#axiom-build) and then drop you out of the docker container. Once the [Packer](https://www.packer.io/) image is successfully created, you will likely need to re-exec into your docker container via `docker exec -it $container_id zsh`.
