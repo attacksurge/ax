@@ -1077,7 +1077,7 @@ fi
 #  Figure out what folder to use
 #
 folder="$(parse_module "$module" "$ext" |  jq -r '.folder // empty')"
-if [[ "$remote_folder" != "false" ]]; then
+if [[ "$user_specified_folder" != "false" ]]; then
     folder="$user_specified_folder"
 fi
 if [[ "$local_folder" != "false" ]]; then
