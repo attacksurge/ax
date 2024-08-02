@@ -1,3 +1,10 @@
+<p align="center">
+<a href="https://ax-framework.gitbook.io/wiki" target="_blank"> 
+<img src="https://raw.githubusercontent.com/attacksurge/ax/main/screenshots/read-the-docs.png"/>
+</a> 
+</p>
+
+
 # Overview
 The Ax Framework is a free and open-source tool utilized by Bug Hunters and Penetration Testers to efficiently operate in multiple cloud environments. It helps build and deploy repeatable infrastructure tailored for offensive security purposes.
 
@@ -11,7 +18,59 @@ With the power of ephemeral infrastructure, most of which is automated, you can 
 
 Ax attempts to follow the Unix philosophy by providing building blocks that allow users to easily orchestrate one or many cloud instances. This flexibility enables the creation of continuous scanning pipelines and the execution of general, one-off, highly parallelized workloads.
 
-Currently, Digital Ocean, IBM Cloud, Linode, Azure and AWS are officially supported cloud providers.
+Currently Digital Ocean, IBM Cloud, Linode, Azure and AWS are officially supported cloud providers.
+
+# Resources
+
+-   [Introduction](https://ax-framework.gitbook.io/wiki#overview)
+-   [the Ax Controller](https://ax-framework.gitbook.io/wiki/overview/ax-controller)
+-   [How it Works](https://ax-framework.gitbook.io/wiki/overview/how-it-works)
+-   [Installation Instructions](https://ax-framework.gitbook.io/wiki/overview/installation-guide)
+    -   [Docker Install](#docker)
+    -   [Easy Install](#easy-install)
+    -   [Manual Install](https://ax-framework.gitbook.io/wiki/overview/installation-guide#manual)
+-   [Fleets](https://ax-framework.gitbook.io/wiki/fundamentals/fleets)
+-   [Scans](https://ax-framework.gitbook.io/wiki/fundamentals/scans)
+-   [Modules](https://ax-framework.gitbook.io/wiki/fundamentals/scans/modules)
+      - [Merging and Module Extensions](https://ax-framework.gitbook.io/wiki/fundamentals/scans/modules/merging-and-module-extensions)
+      - [Adding Simple Modules](https://ax-framework.gitbook.io/wiki/fundamentals/scans/modules/adding-simple-modules)
+      - [Adding One-Shot Modules](https://ax-framework.gitbook.io/wiki/fundamentals/scans/modules/adding-one-shot-modules)
+-   [SBOMs](https://ax-framework.gitbook.io/wiki/overview/ax-controller#sbom)
+  
+# Credits
+
+Digital Ocean is still our best and most support cloud provider. If you're signing up for a new Digital Ocean account, [please use this link](https://m.do.co/c/541daa5b4786) for a $200 free credit!
+<p align="center">
+<a href="https://m.do.co/c/541daa5b4786" target="_blank"> 
+<img src="https://raw.githubusercontent.com/attacksurge/ax/main/screenshots/digitalocean_referral.png"/>
+</a> 
+</p>
+
+IBM Cloud is still our best supported business provider! If you're signing up for a new IBM Cloud account, [please use this link](https://cloud.ibm.com/docs/overview?topic=overview-tutorial-try-for-free) for $200 free credit!
+<p align="center">
+<a href="https://cloud.ibm.com/docs/overview?topic=overview-tutorial-try-for-free" target="_blank"> 
+<img src="https://raw.githubusercontent.com/attacksurge/ax/main/screenshots/ibm_cloud_referral_new.png"/>
+</a> 
+</p>
+
+Linode is an absoutely fantastic cloud provider and highly supported! If you're signing up for a new Linode account, [please use this link](https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d) for $100 free credit!
+<p align="center">
+<a href="https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d" target="_blank"> 
+<img src="https://raw.githubusercontent.com/attacksurge/ax/main/screenshots/linode-referral.png"/>
+</a> 
+</p>
+
+<p align="center">
+<a href="https://azure.com" target="_blank"> 
+<img src="https://raw.githubusercontent.com/attacksurge/ax/main/screenshots/azure_referral.png"/>
+</a> 
+</p>
+
+<p align="center">
+<a href="https://aws.com" target="_blank"> 
+<img src="https://raw.githubusercontent.com/attacksurge/ax/main/screenshots/aws_dark_referral.png"/>
+</a> 
+</p>
 
 # Installation
 ## Docker
@@ -35,11 +94,18 @@ If you have any problems with this installer, or if using an unsupported OS plea
 ## Operating Systems Supported
 | OS         | Supported | Easy Install  | Tested        | 
 |------------|-----------|---------------|---------------|
-| Ubuntu     |    Yes    | Yes           | Ubuntu 20.04  |
-| Kali       |    Yes    | Yes           | Kali 2021.3   |
-| Debian     |    Yes    | Yes           | Debian 10     |
+| Ubuntu     |    Yes    | Yes           | Ubuntu 22.04  |
+| Kali       |    Yes    | Yes           | Kali 2024.2   |
+| Debian     |    Yes    | Yes           | Debian 12     |
 | Windows    |    Yes    | Yes           | WSL w/ Ubuntu |
-| MacOS      |    Yes    | Yes           | MacOS 11.6    |
+| MacOS      |    Yes    | Yes           | macOS 14      |
 | Arch Linux |    Yes    | No            | Yes           |
 
+<br>
+
+<p align="center">
+<a href="https://ax-framework.gitbook.io/wiki" target="_blank"> 
+<img src="https://raw.githubusercontent.com/attacksurge/ax/main/screenshots/read-the-docs.png"/>
+</a> 
+</p>
 
