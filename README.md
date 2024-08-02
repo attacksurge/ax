@@ -103,9 +103,10 @@ If you have any problems with this installer, or if using an unsupported OS plea
 
 <br>
 
+> __Bash:__ Ax is predominantly written in Bash! This makes it easy to contribute to, and it was chosen because [early versions](https://github.com/pry0cc/axiom) were rapidly prototyped in this language.
+
 <p align="center">
 <a href="https://ax-framework.gitbook.io/wiki" target="_blank"> 
 <img src="https://raw.githubusercontent.com/attacksurge/ax/main/screenshots/read-the-docs.png"/>
 </a> 
 </p>
-
