@@ -38,7 +38,7 @@ if [[ $BASEOS == "Linux" ]]; then
  if $(uname -a | grep -qi "Microsoft"); then
   OS="UbuntuWSL"
  else
-   OS=$(lsb_release -i | awk '{ print $3 }')
+   OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
    if ! command -v lsb_release &> /dev/null; then
             OS="unknown-Linux"
             BASEOS="Linux"

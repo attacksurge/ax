@@ -36,7 +36,7 @@ if [[ $BASEOS == "Mac" ]]; then
 brew install doctl
 packer plugins install github.com/digitalocean/digitalocean
 elif [[ $BASEOS == "Linux" ]]; then
-OS=$(lsb_release -i | awk '{ print $3 }')
+OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
    if ! command -v lsb_release &> /dev/null; then
             OS="unknown-Linux"
             BASEOS="Linux"

@@ -43,8 +43,7 @@ brew update && brew install azure-cli
 fi
 
 if [ $BASEOS == "Linux" ] ; then
-
-OS=$(lsb_release -i | awk '{ print $3 }')
+OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
    if ! command -v lsb_release &> /dev/null; then
             OS="unknown-Linux"
             BASEOS="Linux"
