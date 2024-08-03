@@ -105,8 +105,8 @@ FOLDER:
    --local-folder string[]               replace _folder_ in module with user-provided local folder to upload (must be a path to a local folder)
 
 CONFIGURATIONS:
-   --config string[]           replace _config_ in module with user-provided configuration file (must be a configuration file on the remote instances)
-   --local-config string[]     replace _config_ in module with user-provided local configuration file to upload (must be a local configuration file)
+   --remote-config string[]              replace _config_ in module with user-provided configuration file (must be a configuration file on the remote instances)
+   --local-config string[]               replace _config_ in module with user-provided local configuration file to upload (must be a local configuration file)
 
 ONE-SHOT:
    --disable-oneshot           by default, if a module contains the string _target_ or _safe-target_ it is executed as a one-shot module. Use this flag to force disable
@@ -156,7 +156,7 @@ EOF
 ###########################################################################################################
 #  When CONTROL+C is pressed during a scan, perform exit housekeeping. Allow us to download and merge the available results after canceling
 #
-clean_up() { 
+clean_up() {
      trap exit SIGINT SIGTERM
      kill -0 $remotetailPID 2>  /dev/null && kill -9 $remotetailPID  &> /dev/null
      kill -0 $downloaderPID 2>  /dev/null && kill -9 $downloaderPID  &> /dev/null
@@ -181,14 +181,8 @@ clean_up() {
       fi
     fi
 
-    if [[ "$command" =~ "_target_" ]] || [[ "$command" =~ "_safe-target_" ]]; then
-     $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/output/ $tmp/output/_target_ --cache -F=$sshconfig >/dev/null 2>&1"
-    else
-#      if [[ "$ext" == "none" ]] ; then
-#       ext=''
-#      fi
+    # download results
     $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/output $tmp/output/_target_.$ext --cache -F=$sshconfig >/dev/null 2>&1"
-    fi
     merge_output
     echo -e "${BBlue}killing remote processes in a backgroud job${Color_Off}"
     $interlace_cmd_nobar -c "$ssh_command _target_ 'tmux kill-session -t $uid'"  >/dev/null 2>&1
@@ -388,7 +382,7 @@ merge_output() {
       echo -e "${BGreen}File or folder already exists at "$outfile".. backing up to "$outfile-$backup_timestamp" just in case.${Color_Off}"
       mv "$outfile" "$outfile-$backup_timestamp"
      fi
-    else 
+    else
      if ! [ -x "$(command -v anew)" ]; then
       if ! [ -x "$(command -v go)" ]; then
        echo -e "${BRed}Warning: anew not installed and neither is Golang (so we cant install anew). Defaulting to the module extension without using anew${Color_Off}"
@@ -681,7 +675,7 @@ do
             pass+=($i)
             pass+=($n)
         fi
-        if [[ "$arg" == "--config" ]]; then
+        if [[ "$arg" == "--remote-config" ]]; then
             n=$((i+1))
             user_specified_config=$(echo ${!n})
             set=true
@@ -966,6 +960,14 @@ lines="$(wc -l "$input_file" | awk '{ print $1 }')"
 total=$(wc -l "$tmp/selected.conf" | awk '{ print $1 }')
 
 ###########################################################################################################
+#  Check is input file is empty
+#
+if [[ "$lines" -eq "0" ]]; then
+   echo -e "${Red}error input file is empty, exiting${Color_Off}";
+   exit;
+fi
+
+###########################################################################################################
 #  Fleet flag
 #
 if [[ "$fleet" == "" ]]; then
@@ -974,14 +976,6 @@ else
     instances=$(query_instances_cache "$fleet*")
     echo "$instances" | tr ' ' '\n' > "$tmp/hosts"
     total_instances="$(wc -l "$tmp/hosts" | awk '{ print $1 }')"
-fi
-
-###########################################################################################################
-#  Check is input file is empty
-#
-if [[ "$lines" -eq "0" ]]; then
-   echo "${Red}error input file is empty, exiting${Color_Off}";
-   exit;
 fi
 
 ###########################################################################################################
@@ -1020,7 +1014,6 @@ if [[ $pre_flight == true ]]; then
    cat "$tmp/hosts_preflight" | sort -u  > "$tmp/hosts"
    cp "$tmp/hosts_preflight" "$tmp/selected.conf"
    total_instances="$(wc -l "$tmp/hosts" | awk '{ print $1 }')"
-   lines="$(wc -l "$input_file" | awk '{ print $1 }')"
    total=$(wc -l "$tmp/selected.conf" | awk '{ print $1 }')
    instances=$(cat "$tmp/hosts")
    interlace_cmd_nobar="$(which interlace) --no-bar --silent -tL $tmp/hosts -threads $total_instances"
@@ -1136,20 +1129,6 @@ echo -e "${BGreen}uploading local wordlist${Color_Off}${BBlue} : $local_wordlist
 fi
 
 ###########################################################################################################
-#  If --upload is used, upload a user provided file to tmp scan working dir
-#
-if [[ "$upload_user_arg" != "false" ]]; then
- if [[ -f "$upload_file_path" ]]; then
-  echo -e "${BGreen}uploading arbitrary local file ${Color_Off}[ ${BBlue}$upload_file_path${Color_Off} ] ${BGreen}to${Color_Off}:${Color_Off} [ ${BBlue}$scan_dir/$(basename $upload_file_path)${Color_Off} ${Color_Off}]${BGreen} | ${Color_Off}"
-  $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp $upload_file_path _target_:$scan_dir/$(basename $upload_file_path) --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
-  echo -e "${Green}arbitrary local file uploaded successfully!${Color_Off}"
- else
-  echo -e "${Red}Error: arbitrary local file file not found '$upload_file_path'...${Color_Off}"
-  exit 1
- fi
-fi
-
-###########################################################################################################
 #  If -wD or --distribute-wordlist is present in the command line, split and upload the user provided wordlist.
 #
 if [[ "$distribute_wordlist" != "false" ]]; then
@@ -1181,7 +1160,7 @@ fi
 fi
 
 ###########################################################################################################
-#  If --config-file is present in the command line, upload a user provided config file.
+#  If --local-config is present in the command line, upload a user provided config file.
 #
 if [[ "$local_config" != "false" ]]; then
 if [[ -f "$local_config" ]]; then
@@ -1192,6 +1171,21 @@ if [[ -f "$local_config" ]]; then
     interlace --no-bar --silent -threads $total_instances -tL "$tmp/selected.conf" -c "$AXIOM_PATH/interact/axiom-scp $local_config _target_:$destination_config --cache -F=$sshconfig >> /dev/null"
     echo -e "${Green}local config uploaded successfully!${Color_Off}"
 fi
+fi
+
+###########################################################################################################
+#  If --upload is used, upload a user provided file to tmp scan working dir
+#
+if [[ "$upload_user_arg" != "false" ]]; then
+ if [[ -f "$upload_file_path" ]]; then
+  echo -e "${BGreen}uploading arbitrary local file \
+${Color_Off}[ ${BBlue}$upload_file_path${Color_Off} ] ${BGreen}to${Color_Off}: ${Color_Off} [ ${BBlue}$scan_dir/$(basename $upload_file_path)${Color_Off} ${Color_Off}]${BGreen} | ${Color_Off}"
+  $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp $upload_file_path _target_:$scan_dir/$(basename $upload_file_path) --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
+  echo -e "${Green}arbitrary local file uploaded successfully!${Color_Off}"
+ else
+  echo -e "${Red}Error: arbitrary local file file not found '$upload_file_path'...${Color_Off}"
+  exit 1
+ fi
 fi
 
 ###########################################################################################################
@@ -1284,13 +1278,15 @@ $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp $tmp/input/_target_ _tar
 #  This function is spanwed in the background and periodically probes all instances to see if their part of the scan has completed.
 #  When the remote scan process has finished, it creates a file named $(hostname) in the remote scan working directory. During the
 #  scan, axiom checks for each $(hostname) file to know that part of the scan has completed.
-#  Once all instances have created their $(hostname) file, the results are downloaded and this function exits.
 #  One-shot modules results are downloaded every 40 seconds.
 #  Simple-Modules results are downloaded when one instance is finished with its scan
+#  Once all instances have created their $(hostname) file, this function exits.
 #
 function downloader () {
 while true; do
 sleep 30
+
+# check to see if the instance's $(hostname) file exists on the remote tmp scan working dir by trying to download the file
 $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/_target_ $tmp/status/inprogress/_target_ --cache -F=$sshconfig >/dev/null 2>&1"
 for host in "$tmp/status/inprogress/"*
 do
@@ -1300,22 +1296,29 @@ do
   fi
 done
 
+# prepare the Interlace download command
 cat $tmp/status/completed/hosts | sort -u | wc -l | tee $tmp/status/downloader_instances  >/dev/null 2>&1
 cat $tmp/status/completed/hosts | sort -u | tee $tmp/status/downloader_hosts  >/dev/null 2>&1
 
 downloader_cmd="$(which interlace) --no-bar --silent -tL $tmp/status/downloader_hosts -threads $(cat $tmp/status/downloader_instances)"
-if [[ "$command" =~ "_target_" ]] || [[ "$command" =~ "_safe-target_" ]]; then
-$interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/output/ $tmp/output/_target_ --delete --cache -F=$sshconfig >/dev/null 2>&1"
+
+# if its a ONE-SHOT module, just download whatever results are available in the remote instances
+if [[ "$one_shot_module" == "true" ]]; then
+ $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/output/ $tmp/output/_target_ --delete --cache -F=$sshconfig >/dev/null 2>&1"
+
+# if its a Simple-Module, when any instance creates their $(hostname) file, download the results
 else
-if [[ "$(cat $tmp/status/downloader_instances)" -eq "0"  ]]; then
- sleep 10
- continue
-fi
-$downloader_cmd -c "axiom-scp _target_:$scan_dir/output $tmp/output/_target_.$ext --delete --cache -F=$sshconfig >/dev/null 2>&1"
+ if [[ "$(cat $tmp/status/downloader_instances)" -eq "0"  ]]; then
+  sleep 10
+  continue
+ fi
+$downloader_cmd -c "axiom-scp _target_:$scan_dir/output $tmp/output/_target_ --delete --cache -F=$sshconfig >/dev/null 2>&1"
 fi
 
 ###########################################################################################################
-#  Deprovision axiom instances after scan completes if --rm-when-done is in the command
+#  If --rm-when-done is in the command, delete the instance as soon as ax see the instances
+#  $(hostname) file. This doesnt wait until all scanners are finished before deleting the instance
+#  The instance is deleted after the results are downloaded and the instance is finished with its job
 #
 if [[ "$rm_when_done" == "true" ]]; then
     for instance in $(cat "$tmp/status/downloader_hosts");
@@ -1328,6 +1331,7 @@ if [[ "$rm_when_done" == "true" ]]; then
 preflight_function
 fi
 
+# make sure the list of hostnames files downloaded was the same list you started with
 mv $tmp/status/completed/hosts $tmp/status/completed/hosts.tmp
 cat $tmp/status/completed/hosts.tmp | sort -u >> $tmp/status/completed/hosts
  if cmp -s $tmp/status/completed/hosts $tmp/hosts ; then
@@ -1398,52 +1402,46 @@ fi
 $interlace_cmd_nobar -c "axiom-scp $tmp/command _target_:$scan_dir/command --cache -F=$sshconfig >/dev/null 2>&1" >/dev/null 2>&1
 
 ###########################################################################################################
-#  Start the One Shot Module scan by SSH-ing into each instance and running the Interlace command on every remote instance
+#  This is essentially the crux of ax scan, where we execute the final ONE-SHOT or Simple-Module command across the fleet
+#  This calls 'downloader' in the background, a function that periodically probes all instances for their status and downloads results
+#  When 'downloader' returns, it kills 'remote tail PID' and ax scan continues.
+#  'remote tail PID' will also return if Ax can no longer communciate to ALL instances in the selected fleet
+#  once 'remote tail PID' returns, we again download the results just in case.
 #
+touch $tmp/status/completed/hosts
+touch $tmp/status/completed/status
+sleep 3
+downloader &
+downloaderPID=$!
+
+timeout $max_scan_runtime $interlace_cmd_nobar -c "$ssh_command _target_ 'cd $scan_dir && touch stderr.log stdout.log && tail -f $stderr_log & tail -f stdout.log' >> $log_redirect 2>&1 " &
+remotetailPID=$!
+echo $remotetailPID > $tmp/status/remotetailPID
+
+# ONE-SHOT modules run an Interlace command on the remote instances
 if [[ "$one_shot_module" == "true" ]]; then
  echo -e "${BRed}[*]${Red} ENABLING ONESHOT MODE! STARTING $(($total_instances * $threads)) TOTAL THREADS. Using $threads threads per instance with $total_instances instances...${Color_Off}"
- touch $tmp/status/completed/hosts
- touch $tmp/status/completed/status
  sleep 3
- downloader &
- downloaderPID=$!
- timeout $max_scan_runtime $interlace_cmd_nobar -c "$ssh_command _target_ 'cd $scan_dir && touch stderr.log stdout.log && tail -f $stderr_log & tail -f stdout.log' >> $log_redirect 2>&1 " &
- remotetailPID=$!
- echo $remotetailPID > $tmp/status/remotetailPID
-
  $interlace_cmd_nobar -c "$ssh_command _target_ 'tmux new -d -s $uid && \
   tmux send-keys -t $uid \"cd $scan_dir; \
   interlace $dontexpandcidr -threads $threads -tL input -cL command -o output $stdout_stderr_log ; touch _target_\" ENTER ' \
   \"&& tmux send-keys -t $uid exit ENTER\""
 
- wait $remotetailPID  >> /dev/null 2>&1
- $interlace_cmd_nobar -c "$ssh_command _target_ \
-  '[ -f $scan_dir/_target_ ] && echo _target_ scan finished || echo _target_ scan was still running but downloading partial results' >> $tmp/logs/_target_ 2>&1"
- $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/output/ $tmp/output/_target_ --cache -F=$sshconfig >/dev/null 2>&1"
-
-###########################################################################################################
-#  Start the Simple Module scan SSH-ing into each instance and running the Bash command on every remote instance
-#
+# Simple Modules run a bash command on the remote instances
 else
- touch $tmp/status/completed/hosts
- touch $tmp/status/completed/status
- sleep 3
- downloader &
- downloaderPID=$!
- timeout $max_scan_runtime $interlace_cmd_nobar -c "$ssh_command _target_ 'cd $scan_dir && touch stderr.log stdout.log && tail -f $stderr_log & tail -f stdout.log' >> $log_redirect 2>&1 " &
- remotetailPID=$!
- echo $remotetailPID > $tmp/status/remotetailPID
-
  $interlace_cmd_nobar -c "$ssh_command _target_ 'tmux new -d -s $uid && \
   tmux send-keys -t $uid \"cd $scan_dir; \
   bash -i command $stdout_stderr_log ; touch _target_\" ENTER ' \
   \"&& tmux send-keys -t $uid exit ENTER\""
+fi
 
+# wait until 'remote tail PID' returns
  wait $remotetailPID  >> /dev/null 2>&1
+
+# download results again, warn if any instance didn't create their $(hostname) file
  $interlace_cmd_nobar -c "$ssh_command _target_ \
   '[ -f $scan_dir/_target_ ] && echo _target_ scan finished || echo _target_ scan was still running but downloading partial results' >> $tmp/logs/_target_ 2>&1"
- $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/output $tmp/output/_target_.$ext --cache -F=$sshconfig >/dev/null 2>&1"
-fi
+ $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/output $tmp/output/_target_ --cache -F=$sshconfig >/dev/null 2>&1"
 
 ###########################################################################################################
 #  If --download is used, download a user provided file from tmp scan working dir

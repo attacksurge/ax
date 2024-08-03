@@ -208,6 +208,6 @@ if [[ "$create_snapshot" == "true" ]]; then
   echo -e ""
   echo -e "${BYellow}when the snapshot name ${Color_Off}[ ${BBlue}$new_image_name ${Color_Off}]${BYellow} is available in ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}] "
   echo -e "${BGreen}you will have to select the snapshot to use it for axiom-fleet/axiom-init ${Color_Off}[ ${BBlue}axiom-images select $new_image_name${Color_Off} ]"
-  echo -e "${BYellow}please run ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}]${BGreen} every few minutes until you see the snapshot name ${Color_Off}[ ${BBlue}$new_image_name${Color_Off}]"
+  echo -e "${BYellow}please run ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}]${BYellow} every few minutes until you see the snapshot name ${Color_Off}[ ${BBlue}$new_image_name${Color_Off}]"
   echo -e "${BGreen}once the snapshot is created, run ${Color_Off}[ ${BBlue}axiom-images select $new_image_name${Color_Off} ]${BGreen} to select it and use it for axiom-fleet/axiom-init!"
 fi
