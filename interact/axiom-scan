@@ -145,11 +145,11 @@ FLEET:
    --spinup int[]              number of instances to spin up prior to scanning (default uses instances in ~/.axiom/selected.conf)
 
 DEBUG:
-   --debug               run with set -xv, warning: very verbose (use with --cache for less output)
+   --debug                     run with set -xv, warning: very verbose (use with --cache for less output)
 
 EXTRA ARGS:
-   string[]                     supply additional arguments to be passed to the module
-   --extra-args string[]        explicitly define extra args to be passed to the module, must be wrapped single or double quotes (depending on intended variable expansion)
+   string[]                    supply additional arguments to be passed to the module
+   --extra-args string[]       explicitly define extra args to be passed to the module, must be wrapped single or double quotes (depending on intended variable expansion)
 EOF
 
 }
