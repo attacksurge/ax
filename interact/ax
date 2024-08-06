@@ -169,7 +169,6 @@ if [[ -n "$extra_args" ]]; then
   axiom-scan $args_for_scan --extra-args "$extra_args"
 else
  if [[ "$input" == "scan" ]]; then
-echo hello
   axiom-scan $args_for_scan
  else
   axiom-$input $args
