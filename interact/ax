@@ -20,7 +20,7 @@ esac
 
 ###########################################################################################################
 # Help Menu
-# 
+#
 function help() {
         echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  Welcome to the Ax Framework! You can use this wrapper to execute the various axiom scripts (located in ~/.axiom/interact/)"
@@ -142,23 +142,36 @@ do
             set=true
             pass+=($i)
         fi
-        if  [[ "$set" != "true" ]]; then
-            space=" "
-            if [[ $arg =~ $space ]]; then
-              args_for_scan="$args \"$arg\""
+        if [[ "$arg" == "--extra-args" ]]; then
+            n=$((i+1))
+            extra_args="${!n}"
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$set" != "true" ]]; then
+            if [[ "$arg" == *" "* ]]; then
+                args_for_scan+=" \"$arg\""
             else
-              args_for_scan="$args $arg"
+                args_for_scan+=" $arg"
             fi
         fi
-        if  [[ "$set" != "true" ]]; then
-            args="$args $arg"
+
+        if [[ "$set" != "true" ]]; then
+            args+=" $arg"
         fi
 
     fi
 done
 
-if [[ "$input" == "scan" ]]; then
- axiom-scan $args_for_scan
+if [[ -n "$extra_args" ]]; then
+  args="$args --extra-args $extra_args"
+  axiom-scan $args_for_scan --extra-args "$extra_args"
 else
- axiom-$input $args
-fi 
+ if [[ "$input" == "scan" ]]; then
+echo hello
+  axiom-scan $args_for_scan
+ else
+  axiom-$input $args
+ fi
+fi

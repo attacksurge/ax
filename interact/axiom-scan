@@ -145,10 +145,11 @@ FLEET:
    --spinup int[]              number of instances to spin up prior to scanning (default uses instances in ~/.axiom/selected.conf)
 
 DEBUG:
-   --debug               run with set -xv, warning: very verbose
+   --debug               run with set -xv, warning: very verbose (use with --cache for less output)
 
 EXTRA ARGS:
-   string[]              supply additional arguments to be passed to the module
+   string[]                     supply additional arguments to be passed to the module
+   --extra-args string[]        explicitly define extra args to be passed to the module, must be wrapped single or double quotes (depending on intended variable expansion)
 EOF
 
 }
@@ -496,6 +497,7 @@ upload_user_arg="false"
 download_user_arg="false"
 no_logs="false"
 track_finished="false"
+extra_args=""
 
 ###########################################################################################################
 #  Parse command line arguments 
@@ -790,7 +792,15 @@ do
             set=true
             pass+=($i)
         fi
-        if  [[ "$set" != "true" ]]; then
+        if [[ "$arg" == "--extra-args" ]]; then
+            n=$((i+1))
+            #extra_args=$(echo ${!n})
+            extra_args="${!n}"
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if  [[ "$set" != "true" ]] ; then
             space=" "
             if [[ $arg =~ $space ]]; then
               args="$args \"$arg\""
@@ -798,8 +808,13 @@ do
               args="$args $arg"
             fi
         fi
-    fi
+      fi
 done
+
+# add explicit extra args outside of the loop
+if [[ -n "$extra_args" ]]; then
+    args="$args $extra_args"
+fi
 
 ###########################################################################################################
 #  Display axiom banner and authors
@@ -868,7 +883,7 @@ if [ ! -f $AXIOM_PATH/modules/$module.json ]; then
 fi
 
 ###########################################################################################################
-#  Validate that module is valid json
+#  Validate module is valid json
 #
 if ! jq -e . >/dev/null 2>&1 <<< "$(cat $AXIOM_PATH/modules/$module.json)"; then
  echo -e "${Red}error parsing json module $AXIOM_PATH/modules/$module.json, not properly formatted json.. exiting${Color_Off}"
@@ -893,7 +908,7 @@ mkdir -p "$completed"
 mkdir -p "$inprogress"
 
 ###########################################################################################################
-#  Spinup Flag
+#  Spinup logic (--spinup)
 #
 if [[ "$spinup" -gt 0 ]]; then
     if [[ "$fleet" == "" ]]; then
@@ -911,14 +926,14 @@ if [[ "$spinup" -gt 0 ]]; then
 fi
 
 ###########################################################################################################
-#  SSH Cache Flag
+#  SSH Cache Flag (--cache)
 #
 if [[ "$cache" == "false" ]]; then
     generate_sshconfig
 fi
 
 ###########################################################################################################
-# only use instance if a target is available. example: if input only has 1 url, but 3 instances are used
+# only use instance if a target is available. example: if input only has 1 url, but 3 instances are used,
 # only use 1 instance, unless --dont-split is used
 #
 if [[ "$spinup" == 0 ]] && [[ "$split" == "true" ]]; then
@@ -939,7 +954,7 @@ sshconfig="$tmp/sshconfig"
 ###########################################################################################################
 #  Create temporary SSH sockets to use with axiom-scan. An advantage of SSH multiplexing is that the overhead
 #  of creating new TCP connections and negotiating the secure connection is eliminated. This allow us to do
-#  subsequent SSH exec operations ( like downloading results etc ) with no additional overhead.
+#  subsequent SSH exec operations (like probing instances and downloading results etc) with no additional overhead.
 #
 mkdir -p "$AXIOM_PATH/tmp/$uid/sockets"
 socket_tmp=$(echo "$AXIOM_PATH/tmp/$uid/sockets")
@@ -1199,23 +1214,23 @@ if [[ "$safe" == "true" ]]; then
 fi
 
 ###########################################################################################################
-#  If command line args are supplied, combine commands in the module with the arguments passed from the command line into final command (i.e. add_extra_args)
-#  If a wordlist is specified add it to the command
-#  If a config is specified add it to the command
-#  Add escaped command value used for $HOME/.axiom/stats.log file
+#  If extra command line args are supplied, combine commands in the module with the arguments passed from the command line into final command (i.e. add_extra_args)
+#  If explicit_exta_args is supplied, add explicit exta args to final command
+#  If a wordlist, folder or config is specified add it to the command
+#  Create escaped command variable to use in $HOME/.axiom/stats.log file
 #
 [[ ! -z "$args" ]] && command="$(add_extra_args "$command" "$args")"
 
 if [[ "$command" =~ "_wordlist_" ]] ||  [[ "$local_wordlist" != "false" ]] || [[ "$distribute_wordlist" != "false" ]]; then
-command="$(apply_wordlist "$command" "$wordlist")"
+ command="$(apply_wordlist "$command" "$wordlist")"
 fi
 
 if [[ "$command" =~ "_folder_" ]] ||  [[ "$local_folder" != "false" ]]; then
-command="$(apply_folder "$command" "$folder")"
+ command="$(apply_folder "$command" "$folder")"
 fi
 
 if [[ "$command" =~ "_config_" ]] ||  [[ "$local_config" != "false" ]]; then
-command="$(apply_config "$command" "$config_file")"
+ command="$(apply_config "$command" "$config_file")"
 fi
 
 escapedcommand=$(echo $command | jq -R -s '.')
@@ -1237,7 +1252,7 @@ if [[ "$threads" == "null" ]]; then
 fi
 
 ###########################################################################################################
-#  expand any cidrs in the target list
+#  if --expand-cidr is used, expand any cidrs in the target list
 #
 if [[ "$expand_cidr" == "true" ]]; then
     echo -e "${BBlue}expanding cidrs in target list...${Color_Off}"
@@ -1254,7 +1269,7 @@ echo -e "${BGreen}instances: ${BBlue} $total_instances  ${Color_Off}[${BBlue} $(
 echo -e "${BGreen}command: ${Color_Off}[${BBlue} $command ${Color_Off}]${BGreen} | ${BGreen}ext: ${Color_Off}[${BBlue} "$ext" ${Color_Off}]${BGreen} | ${BGreen}threads: ${Color_Off}[${BBlue} "$threads" ${Color_Off}]${BGreen}"
 
 ###########################################################################################################
-#  split target list or copy target list
+#  split target list or copy target list  (--dont-split)
 #  delete expanded_input if --expand-cidr is used
 #
 if [[ "$split" == "true" ]]; then
@@ -1316,8 +1331,8 @@ $downloader_cmd -c "axiom-scp _target_:$scan_dir/output $tmp/output/_target_ --d
 fi
 
 ###########################################################################################################
-#  If --rm-when-done is in the command, delete the instance as soon as ax see the instances
-#  $(hostname) file. This doesnt wait until all scanners are finished before deleting the instance
+#  If --rm-when-done is in the command, delete the instance as soon as ax see the instances $(hostname) file
+#  This doesnt wait until all scanners are finished before deleting the instance
 #  The instance is deleted after the results are downloaded and the instance is finished with its job
 #
 if [[ "$rm_when_done" == "true" ]]; then
@@ -1345,7 +1360,7 @@ done
 }
 
 ###########################################################################################################
-#  display STDOUT only flag (default is false and displays stdout & stderr)
+#  display STDOUT only flag (--stdout). default displays stdout & stderr
 #
 if [[ "$stdout_only" == "true" ]]; then
 stderr_log="/dev/null"
@@ -1355,7 +1370,7 @@ stderr_log="stderr.log"
 fi
 
 ###########################################################################################################
-#  Dont tail if quiet is true
+#  Dont tail if quiet is true (--quiet)
 #
 if [[ "$quiet" == "false" ]]; then
     tail $tail_suppress_headers -f $tmp/logs/* &
@@ -1363,9 +1378,9 @@ if [[ "$quiet" == "false" ]]; then
 fi
 
 ###########################################################################################################
-#  no logs, when the --no-logs flag is used do not redirect log output to log folder. No terminal output
-#  will show. Also, set 'remove_all_logs' to 'true'. Now when the 'delete_logs' function is called, we dont
-#  keep any logs at all.
+#  Do not keep any logs at all (--no-logs).
+#  Redirect terminal output to /dev/null. No terminal output will show
+#  This will also set 'remove_all_logs' to 'true' whe the 'delete_logs' function is called
 #
 if [[ "$no_logs" == "true" ]]; then
     log_redirect="/dev/null"
@@ -1383,14 +1398,13 @@ if [[ "$undocumented_unsafe" == "true" ]]; then
 fi
 
 ###########################################################################################################
-#  set stdout and stderr variable
+#  set stdout and stderr redirect variable for all instances in the scan
 #
 stdout_stderr_log='> >(tee -a stdout.log) 2> >(tee -a stderr.log >&2)'
 
 ###########################################################################################################
-#  Store command in a file and
+#  Store the final command in a file and upload it to each instance with axiom-scp
 #  If command is a one-shot module and --track-finished is used append extra command to track finished targets
-#  Upload command to remote instances with axiom-scp
 #
 echo "$command" > "$tmp/command"
 if [[ "$command" =~ "_target_" ]] || [[ "$command" =~ "_safe-target_" ]]&& [[ "$disable_oneshot" != "true" ]]; then
@@ -1404,9 +1418,9 @@ $interlace_cmd_nobar -c "axiom-scp $tmp/command _target_:$scan_dir/command --cac
 ###########################################################################################################
 #  This is essentially the crux of ax scan, where we execute the final ONE-SHOT or Simple-Module command across the fleet
 #  This calls 'downloader' in the background, a function that periodically probes all instances for their status and downloads results
-#  When 'downloader' returns, it kills 'remote tail PID' and ax scan continues.
-#  'remote tail PID' will also return if Ax can no longer communciate to ALL instances in the selected fleet
-#  once 'remote tail PID' returns, we again download the results just in case.
+#  When 'downloader' returns, it kills 'wait $remotetailPID'. When 'remotetailPID' exits, merging starts.
+#  '$remotetailPID' will also exit if Ax can no longer communciate to ALL instances in the selected fleet or if --max-runtime is exceeded
+#  once '$remotetailPID' returns, we again download the results just in case.
 #
 touch $tmp/status/completed/hosts
 touch $tmp/status/completed/status
