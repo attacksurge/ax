@@ -1,6 +1,20 @@
-[{
-	"command":"echo _target_ | /home/op/go/bin/shuffledns -v -d _target_ -r /home/op/lists/resolvers.txt -w _wordlist_ -o _output_/_cleantarget_",
-	"ext":"txt",
-    "wordlist":"/home/op/lists/seclists/Discovery/DNS/bitquark-subdomains-top100000.txt",
-    "threads":"2"
-}]
+[
+  {
+    "command": "/home/op/go/bin/shuffledns -v -d _target_ -r /home/op/lists/resolvers.txt -w _wordlist_ -o output/_cleantarget_ -mode bruteforce",
+    "ext": "txt",
+    "wordlist": "/home/op/lists/seclists/Discovery/DNS/bitquark-subdomains-top100000.txt",
+    "threads": "2"
+  },
+  {
+    "command": "/home/op/go/bin/shuffledns -v -d _target_ -r /home/op/lists/resolvers.txt -w _wordlist_ -o output/_cleantarget_ -mode bruteforce",
+    "ext": "dir",
+    "wordlist": "/home/op/lists/seclists/Discovery/DNS/bitquark-subdomains-top100000.txt",
+    "threads": "2"
+  },
+  {
+    "command": "/home/op/go/bin/shuffledns -v -d _target_ -r /home/op/lists/resolvers.txt -w _wordlist_ -json -o output/_cleantarget_ -mode bruteforce",
+    "ext": "jsonl",
+    "wordlist": "/home/op/lists/seclists/Discovery/DNS/bitquark-subdomains-top100000.txt",
+    "threads": "2"
+  }
+]

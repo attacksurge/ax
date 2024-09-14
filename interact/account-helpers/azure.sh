@@ -7,14 +7,10 @@ client_id=""
 client_secret=""
 tenant_id=""
 sub_id=""
-appliance_name=""
-appliance_key=""
-appliance_url=""
 token=""
 region=""
 provider=""
 size=""
-email=""
 # Packer::Azure CLI auth will use the information from an active az login session to connect to Azure and set the subscription id and tenant id associated to the signed in account. 
 # Packer::Azure CLI authentication will use the credential marked as isDefault
 use_azure_cli_auth="true"
@@ -41,50 +37,82 @@ case $BASEOS in
 *) ;;
 esac
 
-echo -e "${Blue}Installing azure az...${Color_Off}"
-if [ $BASEOS == "Mac" ]; then
-brew update && brew install azure-cli
-fi
+installed_version=$(az version 2>/dev/null | jq -r '."azure-cli"')
 
-if [ $BASEOS == "Linux" ] ; then
+# Check if the installed version matches the recommended version
+if [[ "$installed_version" != "$AzureCliVersion" ]]; then
+    echo -e "${Yellow}Azure CLI is either not installed or version is lower than the recommended version in ~/.axiom/interact/includes/vars.sh${Color_Off}"
 
-OS=$(lsb_release -i | awk '{ print $3 }')
-   if ! command -v lsb_release &> /dev/null; then
-            OS="unknown-Linux"
-            BASEOS="Linux"
-   fi
-   
-sudo apt-get update -qq
-sudo apt-get install ca-certificates curl apt-transport-https lsb-release gnupg -y -qq
+    # Handle macOS installation/update
+    if [[ $BASEOS == "Mac" ]]; then
+        whereis brew
+        if [ ! $? -eq 0 ] || [[ ! -z ${AXIOM_FORCEBREW+x} ]]; then
+            echo -e "${BGreen}Installing Homebrew...${Color_Off}"
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        else
+            echo -e "${BGreen}Checking for Homebrew... already installed.${Color_Off}"
+        fi
+        if ! [ -x "$(command -v az)" ]; then
+            echo -e "${BGreen}Installing Azure CLI (az)...${Color_Off}"
+            brew update && brew install azure-cli
+        else
+            echo -e "${BGreen}Updating Azure CLI (az)...${Color_Off}"
+            brew update && brew upgrade azure-cli
+        fi
 
-AZ_REPO=$(lsb_release -cs)
-if [ $AZ_REPO == "kali-rolling" ]; then
-check_version=$(cat /proc/version | awk '{ print $6 $7 }' | tr -d '()' | cut -d . -f 1)
-case $check_version in                                
-  Debian10)
-    AZ_REPO="buster"
-    ;;
-  Debian11)
-    AZ_REPO="bullseye"
-    ;;
-  Debian12)
-    AZ_REPO="bookworm"
-    ;;
-  *)
-esac 
-fi
-curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
-echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
-sudo apt-get update -qq
-sudo apt-get install azure-cli -y -qq
-fi
+    # Handle Linux installation/update
+    elif [[ $BASEOS == "Linux" ]]; then
+        echo -e "${BGreen}Installing Azure CLI (az)...${Color_Off}"
+        sudo apt-get update -qq
+        sudo apt-get install ca-certificates curl apt-transport-https lsb-release gnupg -y -qq
 
-if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
-curl -L https://aka.ms/InstallAzureCli | bash
+        if uname -a | grep -qi "Microsoft"; then
+            OS="UbuntuWSL"
+        else
+            OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
+            if ! command -v lsb_release &> /dev/null; then
+                OS="unknown-Linux"
+                BASEOS="Linux"
+            fi
+        fi
+
+        AZ_REPO=$(lsb_release -cs)
+        if [[ $AZ_REPO == "kali-rolling" ]]; then
+            check_version=$(cat /proc/version | awk '{ print $6 $7 }' | tr -d '()' | cut -d . -f 1)
+            case $check_version in
+                Debian10)
+                    AZ_REPO="buster"
+                    ;;
+                Debian11)
+                    AZ_REPO="bullseye"
+                    ;;
+                Debian12)
+                    AZ_REPO="bookworm"
+                    ;;
+                *)
+                    echo "Unknown Debian version. Exiting."
+                    exit 1
+                    ;;
+            esac
+        fi
+
+        curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+        echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
+
+        sudo apt-get update -qq
+        sudo apt-get install azure-cli -y -qq
+
+    elif [[ $OS == "Fedora" ]]; then
+        echo "Needs Conversation for Fedora"
+    fi
+
+    echo "Azure CLI updated to version $AzureCliVersion."
+else
+    echo "Azure CLI is already at or above the recommended version $AzureCliVersion."
 fi
 
 ###########################################################################################################
-# Login and get default user email	
+# Login and get default user email
 #
 default_email=$(az login --use-device-code | jq -r  '.[].user.name')
 
@@ -103,8 +131,7 @@ fi
 ###########################################################################################################
 # get the region or use user provided region
 #
-echo -e -n "${Green}Please enter your default region: (Default 'eastus', press enter) \n>> ${Color_Off}"
-
+echo -e -n "${Green}Please enter your default region (you can always change this later with axiom-region select \$region): Default 'eastus', press enter \n>> ${Color_Off}"
 read region
 
 if [[ "$region" == "" ]]; then
@@ -115,7 +142,7 @@ fi
 ###########################################################################################################
 # get the size of the vm to spinup or use user provded size 
 #
-echo -e -n "${Green}Please enter your default size: (Default 'Standard_B1ls'), press enter) \n>> ${Color_Off}"
+echo -e -n "${Green}Please enter your default size (you can always change this later with axiom-sizes select \$size): Default 'Standard_B1ls', press enter \n>> ${Color_Off}"
 read size
 
 if [[ "$size" == "" ]]; then
@@ -155,27 +182,10 @@ client_id="$(echo $bac | jq -r '.client_id')"
 client_secret="$(echo $bac | jq -r '.client_secret')"
 tenant_id="$(echo $bac | jq -r '.tenant_id')"
 
-echo -e -n "${Green}Please enter your GPG Recipient Email (for encryption of boxes): (optional, press enter) \n>> ${Color_Off}"
-read email
-
-echo -e -n "${Green}Would you like to configure connection to an Axiom Pro Instance? Y/n (Must be deployed.) (optional, default 'n', press enter) \n>> ${Color_Off}"
-read ans
-
-if [[ "$ans" == "Y" ]]; then
-    echo -e -n "${Green}Enter the axiom pro instance name \n>> ${Color_Off}"
-    read appliance_name
-
-    echo -e -n "${Green}Enter the instance URL (e.g \"https://pro.acme.com\") \n>> ${Color_Off}"
-    read appliance_url
-
-    echo -e -n "${Green}Enter the access secret key \n>> ${Color_Off}"
-    read appliance_key 
-fi
-
-data="$(echo "{\"client_id\":\"$client_id\",\"client_secret\":\"$client_secret\",\"tenant_id\":\"$tenant_id\",\"subscription_id\":\"$sub_id\",\"region\":\"$region\",\"resource_group\":\"$resource_group\",\"provider\":\"azure\",\"default_size\":\"$size\",\"appliance_name\":\"$appliance_name\",\"appliance_key\":\"$appliance_key\",\"appliance_url\":\"$appliance_url\", \"email\":\"$email\",\"use_azure_cli_auth\":\"$use_azure_cli_auth\"}")"
+data="$(echo "{\"client_id\":\"$client_id\",\"client_secret\":\"$client_secret\",\"tenant_id\":\"$tenant_id\",\"subscription_id\":\"$sub_id\",\"region\":\"$region\",\"resource_group\":\"$resource_group\",\"provider\":\"azure\",\"default_size\":\"$size\",\"use_azure_cli_auth\":\"$use_azure_cli_auth\"}")"
 
 echo -e "${BGreen}Profile settings below: ${Color_Off}"
-echo $data | jq
+echo $data | jq '.client_secret = "*************************************"'
 echo -e "${BWhite}Press enter if you want to save these to a new profile, type 'r' if you wish to start again.${Color_Off}"
 read ans
 
@@ -190,7 +200,7 @@ read title
 
 if [[ "$title" == "" ]]; then
     title="personal"
-    echo -e "${Blue}Named profile 'personal'${Color_Off}"
+    echo -e "${BGreen}Named profile 'personal'${Color_Off}"
 fi
 
 echo $data | jq > "$AXIOM_PATH/accounts/$title.json"

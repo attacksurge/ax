@@ -1,7 +1,8 @@
-[{
-        "command":"/usr/bin/feroxbuster -u _target_ -w _wordlist_ -o _output_/_cleantarget_",
-        "wordlist":"/home/op/lists/seclists/Discovery/Web-Content/raft-medium-directories.txt",
-        "threads":"2",
-        "ext":""
-
-}]
+[
+  {
+    "command": "/usr/bin/feroxbuster -u _target_ -w _wordlist_ -o output/_cleantarget_",
+    "wordlist": "/home/op/lists/seclists/Discovery/Web-Content/raft-medium-directories.txt",
+    "threads": "2",
+    "ext": ""
+  }
+]

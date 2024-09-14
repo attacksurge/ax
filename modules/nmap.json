@@ -1,10 +1,22 @@
 [
-	{
-		"command":"sudo nmap -iL input -oG output",
-		"ext":"txt"
-	},
-	{
-		"command":"sudo nmap -iL input -oX output",
-		"ext":"xml"
-	}
+  {
+    "command": "sudo nmap -iL input -oN output",
+    "ext": "txt"
+  },
+  {
+    "command": "sudo nmap -iL input -oG output",
+    "ext": "oG"
+  },
+  {
+    "command": "sudo nmap -iL input -oX output",
+    "ext": "xml"
+  },
+  {
+    "command": "sudo nmap -iL input -oA output/output",
+    "ext": "dir"
+  },
+  {
+    "command": "mkdir output ; sudo nmap -iL input -oA output/output",
+    "ext": "none"
+  }
 ]

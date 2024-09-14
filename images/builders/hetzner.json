@@ -1,0 +1,19 @@
+{
+  "builders": [
+    {
+      "type": "hcloud",
+      "image": "ubuntu-24.04",
+      "server_type": "{{user `default_size`}}",
+      "location": "{{user `region`}}",
+      "token": "{{user `hetzner_key`}}",
+      "ssh_username": "root",
+      "snapshot_name": "{{ user `snapshot_name` }}",
+      "snapshot_labels": {
+        "packer.io/version": "{{ packer_version }}",
+        "packer.io/build.id": "{{ build_name }}",
+        "packer.io/build.time": "{{ timestamp }}",
+        "os-flavor": "{{user `default_image`}}"
+      }
+    }
+  ]
+}

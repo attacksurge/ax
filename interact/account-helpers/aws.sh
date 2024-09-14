@@ -3,14 +3,10 @@
 AXIOM_PATH="$HOME/.axiom"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 
-appliance_name=""
-appliance_key=""
-appliance_url=""
 token=""
 region=""
 provider=""
 size=""
-email=""
 
 BASEOS="$(uname)"
 case $BASEOS in
@@ -34,28 +30,56 @@ case $BASEOS in
 *) ;;
 esac
 
+installed_version=$(aws --version 2>/dev/null | cut -d ' ' -f 1 | cut -d '/' -f 2)
 
-install_aws_cli() {
-  echo -e "${Blue}Installing aws cli...${Color_Off}"
-  if [[ $BASEOS == "Mac" ]]; then
-    curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
-    open AWSCLIV2.pkg
-  elif [[ $BASEOS == "Linux" ]]; then
-    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
-    cd /tmp
-    unzip awscliv2.zip
-    sudo ./aws/install
-  fi
-}
+# Check if the installed version matches the recommended version
+if [[ "$installed_version" != $AWSCliVersion ]]; then
+    echo -e "${Yellow}AWS CLI is either not installed or version is lower than the recommended version in ~/.axiom/interact/includes/vars.sh${Color_Off}"
 
-is_installed() {
-  command -v "$1" > /dev/null 2>&1
-}
+    # Determine the OS type and handle installation accordingly
+    if [[ $BASEOS == "Mac" ]]; then
+        echo -e "${BGreen}Installing/Updating AWS CLI on macOS...${Color_Off}"
+        curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+        sudo installer -pkg AWSCLIV2.pkg -target /
+        rm AWSCLIV2.pkg
 
-if is_installed "aws"; then
-  echo -e "${BGreen}aws cli is already installed${Color_Off}"
+    elif [[ $BASEOS == "Linux" ]]; then
+        if uname -a | grep -qi "Microsoft"; then
+            OS="UbuntuWSL"
+        else
+            OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
+            if ! command -v lsb_release &> /dev/null; then
+                OS="unknown-Linux"
+                BASEOS="Linux"
+            fi
+        fi
+
+        # Install AWS CLI based on specific Linux distribution
+        if [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+            echo -e "${BGreen}Installing/Updating AWS CLI on $OS...${Color_Off}"
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+            cd /tmp
+            unzip awscliv2.zip
+            sudo ./aws/install
+            rm -rf /tmp/aws
+            rm /tmp/awscliv2.zip
+        elif [[ $OS == "Fedora" ]]; then
+            echo -e "${BGreen}Installing/Updating AWS CLI on Fedora...${Color_Off}"
+            sudo dnf install -y unzip
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+            cd /tmp
+            unzip awscliv2.zip
+            sudo ./aws/install
+            rm -rf /tmp/aws
+            rm /tmp/awscliv2.zip
+        else
+            echo -e "${BRed}Unsupported Linux distribution: $OS${Color_Off}"
+        fi
+    fi
+
+    echo "AWS CLI updated to version $AWSCliVersion."
 else
-  install_aws_cli
+    echo "AWS CLI is already at or above the recommended version $AWSCliVersion."
 fi
 
 function awssetup(){
@@ -80,36 +104,69 @@ aws configure set aws_access_key_id "$ACCESS_KEY"
 aws configure set aws_secret_access_key "$SECRET_KEY"
 
 default_region="us-west-2"
-echo -e -n "${Green}Please enter your default region: (Default '$default_region', press enter) \n>> ${Color_Off}"
+echo -e -n "${Green}Please enter your default region (you can always change this later with axiom-region select \$region): Default '$default_region', press enter \n>> ${Color_Off}"
 read region
 	if [[ "$region" == "" ]]; then
-	echo -e "${Blue}Selected default option '$default_region'${Color_Off}"
-	region="$default_region"
-	fi
-	echo -e -n "${Green}Please enter your default size: (Default 't2.medium', press enter) \n>> ${Color_Off}"
-	read size
+	 echo -e "${Blue}Selected default option '$default_region'${Color_Off}"
+	 region="$default_region"
+        fi
+echo -e -n "${Green}Please enter your default size (you can always change this later with axiom-sizes select \$size): Default 't2.medium', press enter \n>> ${Color_Off}"
+read size
 	if [[ "$size" == "" ]]; then
-	echo -e "${Blue}Selected default option 't2.medium'${Color_Off}"
-        size="t2.medium"
-fi
+	 echo -e "${Blue}Selected default option 't2.medium'${Color_Off}"
+         size="t2.medium"
+        fi
 
 aws configure set default.region "$region"
 
-echo -e "${BGreen}Creating an Axiom Security Group: ${Color_Off}"
-aws ec2 delete-security-group --group-name axiom > /dev/null 2>&1
-sc="$(aws ec2 create-security-group --group-name axiom --description "Axiom SG")"
-group_id="$(echo "$sc" | jq -r '.GroupId')"
-echo -e "${BGreen}Created Security Group: $group_id ${Color_Off}"
+# Print available security groups
+echo -e "${BGreen}Printing Available Security Groups:${Color_Off}"
+(echo -e "GroupName\tGroupId\tOwnerId\tVpcId\tFromPort\tToPort" && aws ec2 describe-security-groups --query 'SecurityGroups[*].{GroupName:GroupName,GroupId:GroupId,OwnerId:OwnerId,VpcId:VpcId,FromPort:IpPermissions[0].FromPort,ToPort:IpPermissions[0].ToPort}' --output json | jq -r '.[] | [.GroupName, .GroupId, .OwnerId, .VpcId, .FromPort, .ToPort] | @tsv') | column -t
 
-######################################################################################################## we should add this to whitelist your IP - TODO
-group_rules="$(aws ec2 authorize-security-group-ingress --group-id "$group_id" --protocol tcp --port 2266 --cidr 0.0.0.0/0)"
-group_owner_id="$(echo "$group_rules" | jq -r '.SecurityGroupRules[].GroupOwnerId')"
-sec_group_id="$(echo "$group_rules" | jq -r '.SecurityGroupRules[].SecurityGroupRuleId')"
+# Prompt user to enter a security group name
+echo -e -n "${Green}Please enter a security group name above or press enter to create a new security group with a random name \n>> ${Color_Off}"
+read SECURITY_GROUP
 
-data="$(echo "{\"aws_access_key\":\"$ACCESS_KEY\",\"aws_secret_access_key\":\"$SECRET_KEY\",\"group_owner_id\":\"$group_owner_id\",\"security_group_id\":\"$sec_group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\"}")"
+# If no security group name is provided, create a new one with a random name
+if [[ "$SECURITY_GROUP" == "" ]]; then
+  axiom_sg_random="axiom-$(date +%m-%d_%H-%M-%S-%1N)"
+  SECURITY_GROUP=$axiom_sg_random
+  echo -e "${BGreen}Creating an Axiom Security Group: ${Color_Off}"
+  aws ec2 delete-security-group --group-name "$SECURITY_GROUP" > /dev/null 2>&1
+  sc=$(aws ec2 create-security-group --group-name "$SECURITY_GROUP" --description "Axiom SG")
+  group_id=$(echo "$sc" | jq -r '.GroupId')
+  echo -e "${BGreen}Created Security Group: $group_id ${Color_Off}"
+else
+  # Use the existing security group
+  echo -e "${BGreen}Using Security Group: $SECURITY_GROUP ${Color_Off}"
+  group_id=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$SECURITY_GROUP" --query "SecurityGroups[*].GroupId" --output text)
+
+  if [ -z "$group_id" ]; then
+    echo -e "${BGreen}Security Group '$SECURITY_GROUP' not found. Exiting.${Color_Off}"
+    exit 1
+  fi
+fi
+
+# Attempt to add the rule
+group_rules=$(aws ec2 authorize-security-group-ingress --group-id "$group_id" --protocol tcp --port 2266 --cidr 0.0.0.0/0 2>&1)
+
+# Check if the rule already exists
+if echo "$group_rules" | grep -q "InvalidPermission.Duplicate"; then
+  echo -e "${BGreen}The rule already exists for Security Group ID: $group_id ${Color_Off}"
+
+  group_owner_id=$(aws ec2 describe-security-groups --group-ids "$group_id" --query "SecurityGroups[*].OwnerId" --output text)
+  echo -e "${BGreen}GroupOwnerId: $group_owner_id, GroupId: $group_id ${Color_Off}"
+else
+  echo -e "${BGreen}Rule added successfully to Security Group: $group_id ${Color_Off}"
+
+  group_owner_id=$(aws ec2 describe-security-groups --group-ids "$group_id" --query "SecurityGroups[*].OwnerId" --output text)
+  echo -e "${BGreen}GroupOwnerId: $group_owner_id, GroupId: $group_id ${Color_Off}"
+fi
+
+data="$(echo "{\"aws_access_key\":\"$ACCESS_KEY\",\"aws_secret_access_key\":\"$SECRET_KEY\",\"group_owner_id\":\"$group_owner_id\",\"security_group_id\":\"$group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\"}")"
 
 echo -e "${BGreen}Profile settings below: ${Color_Off}"
-echo $data | jq
+echo $data | jq '.aws_secret_access_key = "*************************************"'
 echo -e "${BWhite}Press enter if you want to save these to a new profile, type 'r' if you wish to start again.${Color_Off}"
 read ans
 
@@ -124,7 +181,7 @@ read title
 
 if [[ "$title" == "" ]]; then
     title="personal"
-    echo -e "${Blue}Named profile 'personal'${Color_Off}"
+    echo -e "${BGreen}Named profile 'personal'${Color_Off}"
 fi
 
 echo $data | jq > "$AXIOM_PATH/accounts/$title.json"

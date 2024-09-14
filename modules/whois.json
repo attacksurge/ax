@@ -1,5 +1,7 @@
-[{
-	"command":"/usr/bin/whois _target_ | tee output/_target_",
-	"ext":"dir",
-	"threads":"10"
-}]
+[
+  {
+    "command": "/usr/bin/whois _target_ | tee output/_cleantarget_",
+    "ext": "dir",
+    "threads": "10"
+  }
+]

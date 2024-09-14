@@ -2,18 +2,9 @@ export TERM="xterm-256color"
 export ZSH=/home/op/.oh-my-zsh
 export EDITOR='vim'
 export GOPATH=/home/op/go
-export TERM="xterm-256color"
 export HOME=/home/op
-export PATH="$PATH:$HOME/.rvm/bin:/home/op/go/bin:/home/op/bin:/home/op/.local/bin:/usr/local/go/bin" # Add RVM to PATH for scripting
-export BIG="/home/op/lists/seclists/Discovery/Web-Content/big.txt"
-export WEB="/home/op/lists/seclists/Discovery/Web-Content/"
-export DIRS_LARGE="/home/op/lists/seclists/Discovery/Web-Content/raft-large-directories.txt"
-export DIRS_SMALL="/home/op/lists/seclists/Discovery/Web-Content/raft-small-directories.txt"
-export FILES_LARGE="/home/op/lists/seclists/Discovery/Web-Content/raft-large-files.txt"
-export FILES_SMALL="/home/op/lists/seclists/Discovery/Web-Content/raft-small-files.txt"
-# added by pipsi (https://github.com/mitsuhiko/pipsi)
+export PATH="$PATH:$HOME/.rvm/bin:/home/op/go/bin:/home/op/bin:/home/op/.local/bin:/usr/local/go/bin" 
 
-# -------------------------------- aliases ---------------------------------
 alias ls=" ls --color -sh"
 alias wclone="wget -H -p -k"
 alias nmap="grc nmap"
@@ -22,12 +13,11 @@ alias ping="grc ping"
 alias tail="grc tail"
 alias ps="grc ps"
 
-  
 zstyle ':omz:update' mode auto
 ZSH_THEME="mrtazz"
-plugins=(doctl encode64 vi-mode dircycle github z rails zsh-navigation-tools docker docker-compose vagrant cp ruby nmap common-aliases)
 
 source $ZSH/oh-my-zsh.sh
 source ~/.profile
 source $HOME/bin/tmux-splash.sh
+
 stty sane

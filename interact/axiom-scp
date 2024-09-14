@@ -1,64 +1,172 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
+###########################################################################################################
+# Header
+#
 AXIOM_PATH="$HOME/.axiom"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 source "$AXIOM_PATH/interact/includes/functions.sh"
+starttime=$(date +"%F-TIME-%T")
+start="$(pwd)"
+BASEOS="$(uname)"
+case $BASEOS in
+'Darwin')
+    PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+    ;;
+*) ;;
+esac
 
+###########################################################################################################
+#  divide the the target list by how many instances and used and equally distribute the file list across the fleet
+#
+split_file() {
+file="$1"
+divisor="$2"
+tmp="$3"
+lines="$(wc -l "$file" | awk '{ print $1 }')"
+lines_per_file=$((lines / divisor))
+extra_lines=$((lines % divisor))
+
+# randomize the target list. To disable randomization, use the --dont-shuffle option 
+if [[ "$shuffle" != "false" ]]; then
+ shuf "$file" > "$tmp/split/targets"
+else
+ cp "$file" "$tmp/split/targets"
+fi
+
+# split file 
+first=1
+for ((i=1; i<=divisor; i++)); do
+  last=$((first+lines_per_file-1))
+  if [[ $i -le $extra_lines ]]; then
+    last=$((last+1))
+  fi
+  # echo "Splitting lines $first to $last to file $i"
+  head -n $last "$tmp/split/targets" | tail -n $((last - first + 1))> $tmp/split/$i
+  first=$((last+1))
+done
+rm $tmp/split/targets
+
+# Rename "xaa" etc  to 1 2 3 4 5
+i=1
+for f in $(find "$tmp/split/" -type f | tr '/' ' ' | awk '{ print $NF }')
+do
+        instance="$(echo $instances | awk "{ print \$$i }")"
+        i=$((i+1))
+
+        mv "$tmp/split/$f" "$tmp/input/$instance"
+    done
+    total=$i
+}
+
+###########################################################################################################
+# Declare defaut variables
+#
 instances=""
 cache=false
 args=""
 custom_config=""
 ssh_conf=""
+split=false
 
-i=0
-
+###########################################################################################################
+# Help Menu:
+# 
 function help() {
-        echo -e "${Red}Usage of axiom-scp copying files between fleets${Color_Off}"
-       	echo -e "--cache (optional)"
-	      echo -e "    Do not regenerate SSH config"
-        echo -e "-F (string)"
-        echo -e "    Path of custom SSH config file to use"
-        echo -e "Example Usage: ${Blue}axiom-scp 'myfleet*':/home/op/myfile.txt '~/local/folder/\$name.txt' --cache${Color_Off}"
-        echo -e "    Copy a remote file from all instances in myfleet to local folder. Do no generate SSH config"
-        echo -e "    \$name must be wrapped single quotes. \$name is a required literal string and gets interpolated from the instance name."
-        echo -e "Example Usage: ${Blue}axiom-scp myfleet05:/home/op/myfile-from-myfleet05.txt '~/local/folder/myfile-from-myfleet05.txt' ${Color_Off}"
-        echo -e "    Copy a remote file from one instance 'myfleet05' to a local file"
-        echo -e "Example Usage: ${Blue}axiom-scp myfile.txt 'myfleet*':/home/op/myfile.txt ${Color_Off}" 
-        echo -e "    Copy a local file to all instances in myfleet"
-        echo -e "Example Usage: ${Blue}axiom-scp mytemplates/ 'myfleet*':/home/op/custom-templates ${Color_Off}"
-        echo -e "    Copy a local folder to all instances in myfleet"
-} 
+        echo -e "${BWhite}Description:${Color_Off}"
+        echo -e "  axiom-scp supports downloading and uploading files or folders to fleets of axiom instance or single instances"
+        echo -e "  axiom-scp optionally allows splitting a local file across a fleet of instances"
+        echo -e "  axiom-scp supports globbing to expand the instance names from a fleet prefix"
+        echo -e "  when the literal string '\$name' is in the command, axiom-scp automatically interpolates the instances name"
+        echo -e "${BWhite}Examples:${Color_Off}"
+        echo -e "  ${Green}axiom-scp mytemplates/ 'myfleet*':/home/op/custom-templates ${Color_Off} # Upload a local folder to all instances in myfleet"
+        echo -e "  ${Green}axiom-scp custom-wordlist.txt 'myfleet*':/home/op/custom-wordlist.txt${Color_Off} # Upload local file to all instances in myfleet"
+        echo -e "  ${Green}axiom-scp custom-wordlist.txt 'myfleet*':/home/op/custom-wordlist.txt --split${Color_Off} # Split and upload local wordlist to all instances in myfleet"
+        echo -e "  ${Green}axiom-scp testy01:/home/op/download-file.txt download-file.txt${Color_Off} # Download file from a single instance named testy01"
+        echo -e "  ${Green}axiom-scp 'testy*':/home/op/results.txt '~/home/localuser/folder/\$name.txt'${Color_Off} # Download file from all instances in testy fleet,"
+        echo -e "  when using '\$name', it must be wrapped in single quotes and gets interpolated from the instance name"
+        echo -e "${BWhite}Usage:${Color_Off}"
+        echo -e "  --split (optional)"
+        echo -e "    Split the local file depending on the size of the fleet, equally distribute the file across the fleet"
+        echo -e "  --sshconfig <path to custom ssh config> (optional)"
+        echo -e "    Path of custom SSH config file to use (default uses sshconfig in ~/.axiom/.sshconfig)"
+        echo -e "  --cache (optional)"
+        echo -e "    Temporarily do not generate SSH config and instead connect with cached SSH config"
+        echo -e "  --debug (optional)"
+        echo -e "    Enable debug mode (VERY VERBOSE!)"
+        echo -e "  --help (optional)"
+        echo -e "    Display this help menu"
+}
 
+###########################################################################################################
+# Parse command line arguments 
+#
 if [[ "$@" == "--help" ]] || [[ "$@" == "-h" ]] || [[ "$@" == "" ]]; then
 help
 exit
 fi
 
-for var in "$@"
+###########################################################################################################
+# Parse command line arguments 
+#
+i=0
+for arg in "$@"
 do
-    set=false
-    if [[ "$var" == "--cache" ]]; then
-		cache=true
-        set=true
+    i=$((i+1))
+    if [[  ! " ${pass[@]} " =~ " ${i} " ]]; then
+        set=false
+        if [[ "$arg" == "--debug" ]]; then
+            set -xv
+            set=true
+            pass+=($i)
+        fi
+        if [[ "$arg" == "--sshconfig" ]]; then
+            n=$((i+1))
+            custom_config=$(echo ${!n})
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$arg" =~ "-F=" ]]; then
+            n=$((i+1))
+            custom_config="$(echo "$arg" | cut -d '=' -f 2)"
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]]; then
+            usage
+            exit
+            set=true
+            pass+=($i)
+        fi
+        if [[ "$arg" == "--split" ]]; then
+            split=true
+            set=true
+            pass+=($i)
+        fi
+        if [[ "$arg" == "--cache" ]]; then
+            cache=true
+            set=true
+            pass+=($i)
+        fi
+        if  [[ "$set" != "true" ]]; then
+            args="$args $arg"
+        fi
     fi
-
-    if [[ "$var" =~ "-F=" ]]; then
-        custom_config="$(echo "$var" | cut -d '=' -f 2)"
-        cache=true
-        set=true
-    fi
-
-    if [[ "$set" == "false" ]]; then
-		args="$args $var"
-    fi
-	i=$((i+1))
 done
 
+###########################################################################################################
+# SSH cache flag, dont generate ssh config if true
+#
 if [ $cache != "true" ]
 then
 	generate_sshconfig
 fi
 
+###########################################################################################################
+# custom SSH config to pass
+#
 if [[ "$custom_config" != "" ]]; then
     if [[ -f "$custom_config" ]]; then
         ssh_conf="$custom_config"
@@ -70,75 +178,123 @@ else
     ssh_conf="$AXIOM_PATH/.sshconfig"
 fi
 
-echo -n "" > $AXIOM_PATH/tmp/cmds.txt
+###########################################################################################################
+#  Create temporary directories 
+#
+scp_dir=$(mktemp -d)
+mkdir -p "$scp_dir/split"
+mkdir -p "$scp_dir/input"
 
+# Loop over each argument in the 'args' variable
 for var in $args
 do
-	host=$(echo $var | cut -d ":" -f 1)
-	if [[ "$host" =~ "*" ]]
-	then
-		instances=$(query_instances_cache "-F=$ssh_conf" "$host")
-		full=$(echo "$var" | sed "s/\$name/$instance/g")
-		if [[ "$str" ]]
-		then
-			str="$str $full"
-		else
-			str="$full"
-		fi
+    # Extract the host part from the current argument, assuming the format 'host:/path'
+    host=$(echo $var | cut -d ":" -f 1)
 
-	else
-		if [[ "$str" ]]
-		then
-			str="$str $var"
-		else
-			str="$var"
-		fi
-	fi
+    # Check if the host part contains a wildcard character '*'
+    if [[ "$host" =~ "*" ]]
+    then
+        # Query for instances matching the wildcard host pattern and store the result
+        instances=$(query_instances_cache "-F=$ssh_conf" "$host")
+
+        # Replace the placeholder '$name' in the argument with the actual instance name
+        full=$(echo "$var" | sed "s/\$name/$instance/g")
+
+        # Append the modified argument to the 'str' variable, or set 'str' if empty
+        if [[ "$str" ]]
+        then
+            str="$str $full"
+        else
+            str="$full"
+        fi
+
+    else
+        # If the host part does not contain a wildcard, directly append the current argument to 'str'
+        if [[ "$str" ]]
+        then
+            str="$str $var"
+        else
+            str="$var"
+        fi
+    fi
 done
 
+###########################################################################################################
+# Split the file when --split is used
+#
+if [[ "$split" == "true" ]]; then
+instances_count=$(echo $instances | tr ' ' '\n' |wc -l)
+file_to_split=$(echo $args | cut -d ' ' -f 1)
+ if [ -f $file_to_split ]; then
+  echo -e "${BGreen}Splitting file $file_to_split..${Color_Off}"
+  split_file $file_to_split $instances_count "$scp_dir"
+ else
+  echo "File to split: $file_to_split does not exist.. exiting"
+  exit 1
+ fi
+fi
+
+# Check if the 'instances' variable is not empty, indicating specific instances are to be handled
 if [ "$instances" ]; then
+    # Loop over each specified instance
     for instance in $instances
     do
         line=""
-    for var in $args
-    do
-	    host=$(echo $var | cut -d ":" -f 1)
-	    str=""
-	    if [[ "$host" =~ "*" ]]
-	    then
-		    full=$(echo "$var" | sed "s/$host/$instance/g"| sed 's/\*//g')
-		    if [[ "$str" ]]
-		    then
-			    str="$str $full"
-		    else
-			    str="$full"
-		    fi
-	    else
-		    if [[ "$str" ]]
-		    then
-			    str="$str $var"
-		    else
-			    str="$var"
-		    fi
-        fi
+        # Iterate over each argument provided to the script
+        for var in $args
+        do
+            # Extract the host part from the argument
+            host=$(echo $var | cut -d ":" -f 1)
+            str=""
+            # Check if the host part contains a wildcard character '*'
+            if [[ "$host" =~ "*" ]]
+            then
+                # Replace the wildcard host with the current instance name and remove any '*' characters
+                full=$(echo "$var" | sed "s/$host/$instance/g" | sed 's/\*//g')
+                # Append the processed path to 'str' or set 'str' if it's the first addition
+                if [[ "$str" ]]
+                then
+                    str="$str $full"
+                else
+                    str="$full"
+                fi
+            else
+                # If there's no wildcard, append the original argument to 'str'
+                if [[ "$str" ]]
+                then
+                    str="$str $var"
+                else
+                    str="$var"
+                fi
+            fi
 
-	    str=$(echo $str | sed "s/\$name/$instance/g")
+            # Replace any '$name' placeholder in 'str' with the actual instance name
+            str=$(echo $str | sed "s/\$name/$instance/g")
 
-	    if [ "$line" ]
-	    then
-		    line="$line $str"
-	    else
-		    line="$str"
-	    fi
+            # Accumulate the final command or path for the current instance in 'line'
+            if [ "$line" ]
+            then
+                line="$line $str"
+            else
+                line="$str"
+            fi
+        done
+
+        # Construct the rsync command with SSH options
+	if [[ "$split" == "true" ]]; then
+	  rest_of_line=$(echo $line | cut -d ' ' -f 2-)
+          line="$scp_dir/input/$instance $rest_of_line"
+	fi
+        cmd="rsync -e 'ssh -o StrictHostKeyChecking=no -F $ssh_conf' -azr --progress $line"
+
+        # Append the command to a temporary file for later execution
+        echo "$cmd" >> $scp_dir/cmds.txt
     done
-
-    cmd="rsync -e 'ssh -o StrictHostKeyChecking=no -F $ssh_conf' -azr --progress $line"
-    echo "$cmd" >> $AXIOM_PATH/tmp/cmds.txt
-    #scp -r -o StrictHostKeyChecking=no -F $AXIOM_PATH/.sshconfig $line
-    done
-    #sleep 1
+    # Echo a message indicating parallel file transfer is about to start
     echo -e "${BGreen}Running parallel file transfer...${Color_Off}"
-    interlace --silent -t NULL -cL $AXIOM_PATH/tmp/cmds.txt
+    # Use 'interlace' to execute the rsync commands in parallel for efficiency
+    interlace --silent -t NULL -cL $scp_dir/cmds.txt
 else
+    # If only one instance is specified, perform a default rsync operation with the provided arguments
     rsync -e "ssh -o StrictHostKeyChecking=no -F $ssh_conf"  -avzr --progress $args --timeout=10
 fi

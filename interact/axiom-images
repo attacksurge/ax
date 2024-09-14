@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 
 ###################################################################
-# Title	: axiom-images                                                                                             
-# Author : 0xtavian                                                
-# Github : https://github.com/0xtavian                                           
+# Title	: axiom-images
+# Author : 0xtavian
+# Github : https://github.com/0xtavian
 ###################################################################
 
+###################################################################
+#  Header
+#
 AXIOM_PATH="$HOME/.axiom"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 source "$AXIOM_PATH/interact/includes/functions.sh"
@@ -16,37 +19,68 @@ BASEOS="$(uname)"
 account_path=$(ls -la $AXIOM_PATH/axiom.json | rev | cut -d " " -f 1 | rev)
 accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
 current=$(ls -lh ~/.axiom/axiom.json | awk '{ print $11 }' | tr '/' '\n' | grep json | sed 's/\.json//g') > /dev/null 2>&1
+provisioner="$(jq -r ".provisioner" "$AXIOM_PATH/axiom.json")"
+provider="$(jq -r ".provider" "$AXIOM_PATH/axiom.json")"
 
-
+###########################################################################################################
+# Help Menu:
+#
 function usage() {
-  cat << EOF
- Examples: axiom-images ls && axiom-images rm axiom-barebones-1634682130 && axiom-images use axiom-default-1634682131
- Usage:
- ls                                      List snapshots created
- get                       Display info about the current image
- use | set              Use snapshot for axiom-init/axiom-fleet
- rm                                Remove snapshot from account
- help | --help | -h                        Print this help menu
-EOF
+        echo -e "${BWhite}Description:${Color_Off}"
+        echo -e "  Manage images created by '${BGreen}axiom-build${Color_Off}' or '${BGreen}axiom-images${Color_Off}' with '${BGreen}axiom-images${Color_Off}'!"
+        echo -e "  After creating an image, list all images on the account '${BGreen}axiom-images ls${Color_Off}'"
+        echo -e "  Delete images on the account that are no longer needed '${BGreen}axiom-images rm \$image_name${Color_Off}'"
+        echo -e "  Create a new image/snapshot from a deployed instance with '${BGreen}axiom-images create${Color_Off}' (list all deployed instances with '${BGreen}axiom-ls${Color_Off}')"
+        echo -e "  After the new image is created, or to switch to a different image on the account, select it with '${BGreen}axiom-images select \$image_name${Color_Off}' to use for '${BGreen}axiom-init/axiom-fleet${Color_Off}'!"
+        echo -e "${BWhite}Examples:"
+        echo -e "  ${Green}axiom-images ls ${Color_Off}# List all images on the account"
+        echo -e "  ${Green}axiom-images get ${Color_Off}# Print details from ~/.axiom/axiom.sjon"
+        echo -e "  ${Green}axiom-images rm axiom-default-1709878237${Color_Off} # Delete image named axiom-default-1709878237 from the account"
+        echo -e "  ${Green}axiom-images create${Color_Off} # Start '${BGreen}axiom-images${Color_Off}' image creation wizard"
+        echo -e "  ${Green}axiom-images create testy01${Color_Off} # Skip image creation wizard and instead create image from testy01 instance"
+        echo -e "  ${Green}axiom-images select axiom-barebones-1709944106${Color_Off} # Select image named axiom-barebones-1709944106 to use with future ${Color_Off}'${BGreen}axiom-init/axiom-fleet${Color_Off}'" 
+        echo -e "${BWhite}Usage:${Color_Off}"
+        echo -e "  ls (optional)"
+        echo -e "    List all images on the account '${BGreen}axiom-images ls${Color_Off}'"
+        echo -e "  get (optional)"
+        echo -e "    Print information about current account, equivalent to (cat ~/.axiom/axiom.json) '${BGreen}axiom-images get${Color_Off}'"
+        echo -e "  rm <required image name>"
+        echo -e "    Specify an image by name to delete (must be an image name from '${BGreen}axiom-images ls${Color_Off}')"
+        echo -e "  create <optional instance name>"
+        echo -e "    Kick off axiom-images creation wizard or specify an instance to create an image from '${BGreen}axiom-images create \$instance_name${Color_Off}'"
+        echo -e "  select <required image name>"
+        echo -e "    Select a new image to use for future ${Color_Off}'${BGreen}axiom-init/axiom-fleet${Color_Off}', replaces 'imageid' in ~/.axiom/axiom.json with new 'imageid' (must be an image name from '${BGreen}axiom-images ls${Color_Off}')"
+        echo -e "  --debug (optional)"
+        echo -e "    Enable debug mode (VERY VERBOSE!)"
+        echo -e "  --help (optional)"
+        echo -e "    Display this help menu"
 exit
 }
 
 ###########################################################################################################
-# Declare defaut variables
+#  Declare defaut variables
+#
 list=false
 help=true
 rm=false
 use=false
-# Parse command line arguments 
+create_snapshot=false
+
+###########################################################################################################
+#  Parse command line arguments
 #
+if [[ "$@" == "--help" ]] || [[ "$@" == "-h" ]] || [[ "$@" == "" ]]; then
+usage
+exit
+fi
 i=0
 for arg in "$@"
 do
     i=$((i+1))
     if [[  ! " ${pass[@]} " =~ " ${i} " ]]; then
         set=false
-        if [[ "$i" == 1 ]]; then
-            input="$1"
+       if [[ "$arg" == "--debug" ]]; then
+            set -xv
             set=true
             pass+=($i)
         fi
@@ -58,7 +92,7 @@ do
             pass+=($i)
             pass+=($n)
         fi
-        if [[ "$arg" == "use" ]] || [[ "$arg" == "set" ]] ; then
+        if [[ "$arg" == "select" ]] ||[[ "$arg" == "set" ]] || [[ "$arg" == "use" ]] ; then
             n=$((i+1))
             use=true
             snapshot=$(echo ${!n})
@@ -67,11 +101,9 @@ do
             pass+=($n)
         fi
         if [[ "$arg" == "ls" ]]; then
-            n=$((i+1))
             list="true"
             set=true
             pass+=($i)
-            pass+=($n)
         fi
         if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] || [[ "$arg" == "help" ]]; then
             usage
@@ -84,11 +116,14 @@ do
             set=true
             pass+=($i)
         fi
-        if [[ "$arg" == "--debug" ]]; then
-            debug="true"
+        if [[ "$arg" == "create" ]] ; then
+            n=$((i+1))
+            create_snapshot="true"
+            instance_name=$(echo ${!n})
             set=true
             pass+=($i)
-        fi
+            pass+=($n)
+        fi 
         if  [[ "$set" != "true" ]]; then
             args="$args $arg"
         fi
@@ -96,49 +131,93 @@ do
     fi
 done
 
-# Display Help Menu
-#
-if [[ "$@" == "--help" ]] || [[ "$@" == "-h" ]] || [[ "$@" == "" ]] || [[ "$@" == "help" ]]; then
-usage
-exit
-fi
-
 # Get the image in /.axiom/accout/account.json
 #
 if [[ "$get" == "true" ]]; then
-echo -e "${Green}Displaying Account Info from: $current${Color_Off}"
-cat $(echo $account_path)
-exit 1
+ echo -e "${Green}Displaying Account Info from: $current${Color_Off}"
+ cat $(echo $account_path)
+ exit 1
 fi
-
 
 # List Snapshots
 #
 if [[ "$list" == "true" ]]; then
-echo -e "${Green}Listing Available Snapshots in Account: $current${Color_Off}"
-get_snapshots
-exit 1
+ echo -e "${Green}Listing Available Snapshots in Account: $current${Color_Off}"
+ get_snapshots
+ exit 1
 fi
-
-# If snapshot name not supplied, exit
-#
-if [ -z ${snapshot:+x} ]; then echo -e "${Red}Snapshot name not supplied. To list all snapshots run axiom-images ls${Color_Off}" && exit 1; fi
-
 
 # Delete Snapshot by its name
 #
 if [[ "$rm" == "true" ]]; then
-echo -e "${Green}Deleting Snapshot by name: $(echo $snapshot)${Color_Off}"
-delete_snapshot $snapshot || { echo -e "${Red}Failed to find snapshot with name: "$snapshot"... exiting${Color_Off}" ; exit 1; }
-echo -e "${Green}Successfully deleted snapshot!${Color_Off}"
+ if [ -z ${snapshot:+x} ]; then
+  echo -e "${Red}Snapshot name not supplied. To list all snapshots run axiom-images ls${Color_Off}"
+  exit 1
+ fi
+ echo -e "${Green}Deleting Snapshot by name: $(echo $snapshot)${Color_Off}"
+ delete_snapshot $snapshot || { echo -e "${Red}Failed to find snapshot with name: "$snapshot"... exiting${Color_Off}" ; exit 1; }
+ echo -e "${Green}Successfully deleted snapshot!${Color_Off}"
 fi
 
 # Use Snapshot by name. Run axiom-init or axiom-fleet to use after updating
 #
 if [[ "$use" == "true" ]]; then
-old="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.imageid')"
-jq '.imageid="'$snapshot'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
-get_snapshots | grep $snapshot || { echo -e "${Red}Failed to find snapshot with name: "$snapshot"... exiting${Color_Off}" ; exit 1; }
-echo -e "${Green}Successfully updated imageid $old with new imageid in $snapshot in account: $current${Color_Off}"
-echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
+ old="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.imageid')"
+ jq '.imageid="'$snapshot'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+ get_snapshots | grep $snapshot || { echo -e "${Red}Failed to find snapshot with name: "$snapshot"... exiting${Color_Off}" ; exit 1; }
+ echo -e "${Green}Successfully updated imageid $old with new imageid in $snapshot in account: $current${Color_Off}"
+ echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
+fi
+
+# Create a snapshot from an existing axiom instance to use for future axiom-fleet axiom-init
+#
+if [[ "$create_snapshot" == "true" ]]; then
+
+ if [[ "$provider" == "azure" ]]; then
+
+  echo -e -n "${Red}Error: at this moment we dont support taking snapshots with azure :/"
+  echo -e -n "${Red}Open a issue showing the az cli commands needed to take a snapshot and we'll look into it!"
+  echo -e -n "${Red}Exiting..."
+  exit 1
+
+ fi
+
+ if [ -z "$instance_name" ]; then
+  axiom-ls
+  echo -e -n "${BGreen}Enter the instance name to make a snapshot/image and use that image for axiom-init/axiom-fleet \n>> ${Color_Off}"
+  read instance_name
+ fi
+
+ if [ -z $(instance_ip $instance_name) ]; then
+  echo -e "${BRed}could not find instance name ${Color_Off}[ ${BBlue}$instance_name ${Color_Off}]${BRed} on account, exiting.."
+  echo -e "${BRed}did you enter a valid instance name from ${Color_Off}[ ${BBlue}axiom-ls ${Color_Off}]${BRed}?"
+  exit
+ fi
+  new_image_name=axiom-"$instance_name"-$(date +%s)
+  instance_ip
+  echo -e "${BGreen}Creating new image/snapshot from ${Color_Off}[ ${BBlue}$instance_name ${Color_Off}]${BGreen}...${Color_Off}"
+  create_snapshot "$instance_name" "$new_image_name"
+  sleep 5
+
+
+   if [[ "$provider" == "hetzner" ]]; then
+    echo -e "${BGreen}If the command above was sucessful, the snapshot ${Color_Off}[ ${BBlue}$new_image_name ${Color_Off}] ${BGreen}should be created"
+    echo -e "${BGreen}...printing available images with ${Color_Off}[ ${BBlue}axiom-image ls ${Color_Off}]"
+    echo -e "${BGreen}Selecting snapshot ${Color_Off}[ ${BBlue}$new_image_name ${Color_Off}] ${BGreen} now with ${Color_Off}[ ${BBlue}axiom-images select $new_image_name ${Color_Off}]"
+    ax images select "$new_image_name"
+   else
+    echo -e ""
+    echo -e "${BGreen}If the command above was sucessful, the snapshot ${Color_Off}[ ${BBlue}$new_image_name ${Color_Off}] ${BGreen}should be in the process of being created..."
+    echo -e "${BYellow}creating a snapshot takes some time and could be anywhere from 10 to 30 minutes depending on the size and regions${Color_Off}"
+    echo -e "${BGreen}you can monitor the creation of the snapshot by logging into the cloud console${Color_Off}"
+    echo -e "${BYellow}or you can use ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}] ${BYellow}to print available images${Color_Off}"
+    echo -e "${BGreen}...printing available images with ${Color_Off}[ ${BBlue}axiom-image ls ${Color_Off}] ${BGreen}now, but its unlikely the snapshot ${Color_Off}[ ${BBlue}$new_image_name ${Color_Off}] ${BGreen}is created yet.."
+    sleep 5
+    axiom-images ls
+    echo -e ""
+    echo -e "${BYellow}when the snapshot name ${Color_Off}[ ${BBlue}$new_image_name ${Color_Off}]${BYellow} is available in ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}] "
+    echo -e "${BGreen}you will have to select the snapshot to use it for axiom-fleet/axiom-init ${Color_Off}[ ${BBlue}axiom-images select $new_image_name${Color_Off} ]"
+    echo -e "${BYellow}please run ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}]${BYellow} every few minutes until you see the snapshot name ${Color_Off}[ ${BBlue}$new_image_name${Color_Off}]"
+    echo -e "${BGreen}once the snapshot is created, run ${Color_Off}[ ${BBlue}axiom-images select $new_image_name${Color_Off} ]${BGreen} to select it and use it for axiom-fleet/axiom-init!"
+  fi
 fi

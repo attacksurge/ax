@@ -15,18 +15,18 @@ start="$(pwd)"
 BASEOS="$(uname)"
 account_path=$(ls -la $AXIOM_PATH/axiom.json | rev | cut -d " " -f 1 | rev)
 accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
-current=$(ls -lh ~/.axiom/axiom.json | awk '{ print $11 }' | tr '/' '\n' | grep json | sed 's/\.json//g') > /dev/null 2>&1
+current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)> /dev/null 2>&1
 
 
 function usage() {
-  cat << EOF
-  Usage: axiom-power on 'rez\*'  #turns on instances starting with 'rez'
-         axiom-power off '\*'    #turns off all instances
-  Examples:
-  on                             Power on instance by instance name
-  off                           Power off instance by instance name 
-  reboot                           Reboot instance by instance name
-  help | --help | -h                           Print this help menu
+cat << EOF
+Usage: axiom-power on 'rez\*' # turns on instances starting with 'rez' 
+       axiom-power off '\*'   # turns off all instances
+Examples:
+on                             Power on instance by instance name
+off                           Power off instance by instance name 
+reboot                           Reboot instance by instance name
+help | --help | -h                           Print this help menu
 EOF
 exit
 }

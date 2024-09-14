@@ -3,12 +3,14 @@
 AXIOM_PATH="$HOME/.axiom"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 source "$AXIOM_PATH/interact/includes/functions.sh"
-source "$AXIOM_PATH/interact/includes/appliance.sh"
-current=$(ls -lh ~/.axiom/axiom.json | awk '{ print $11 }' | tr '/' '\n' | grep json | sed 's/\.json//g') > /dev/null 2>&1
+current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)
+echo -e "${BWhite}Listing instances in account: $(echo $current)${Color_Off}"
 
-echo -e "Listing instances in account: $(echo $current)" | perl -pe '$_ = "\033[0;37m$_\033[0;34m" if($. % 2)'
+
 if [ -z $1 ]; then
-	instance_pretty
+
+instance_pretty |  perl -pe '$_ = "\033[37m$_\033[0m" if($. % 2); $_ = "\033[32m$_\033[0m" unless ($. % 2)'
+
 else
 	if [[ "$1" == "--json" ]]; then
 		instances

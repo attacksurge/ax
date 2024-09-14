@@ -1,4 +1,6 @@
-[{
-	"command":"sudo unimap -f input | tee output",
-	"ext":"txt"
-}]
+[
+  {
+    "command": "sudo unimap -f input | tee output",
+    "ext": "txt"
+  }
+]

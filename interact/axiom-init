@@ -1,20 +1,6 @@
 #!/usr/bin/env bash
 
 ###########################################################################################################
-# Title : axiom-init
-# About: Initialize axiom instances with differnet options, such as image, region, size and axiom deployment profile
-#
-# Examples: 
-#
-# axiom-init # provision instance with random name
-# axiom-init --deploy desktop # provision instance with random name, then deploy axiom profile 'desktop'
-# axiom-init testy01 # provision instance named testy01
-#
-# axiom-init testy01 --region nyc3 --image axiom-barebones-1635920849 --size s-1vcpu-2gb --deploy desktop --shell
-#
-###########################################################################################################
-
-###########################################################################################################
 # Header
 #
 AXIOM_PATH="$HOME/.axiom"
@@ -35,14 +21,13 @@ esac
 ###########################################################################################################
 # Declare defaut variables
 #
-provider="$(jq -r '.provider' "$AXIOM_PATH/axiom.json")"
-gen_name="${names[$RANDOM % ${#names[@]}]}$((10 + RANDOM % 20))"
+provider="$(jq -r '.provider' "$AXIOM_PATH"/axiom.json)"
 region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
 size="$(jq -r '.default_size' "$AXIOM_PATH"/axiom.json)"
 image="$(jq -r '.imageid' "$AXIOM_PATH"/axiom.json)"
+sshkey="$(jq -r '.sshkey' "$AXIOM_PATH"/axiom.json)"
 box_name=""
 connect_shell=false
-restore=false
 deploy=false
 expire=false
 default_expiry=525600000
@@ -52,27 +37,12 @@ no_select=false
 manual_image_id=false
 
 ###########################################################################################################
-# spinner functions
+# waitabit function
 # TODO https://github.com/pry0cc/axiom/issues/175
 #
-show_spinner() {
-        local -r pid="${1}"
-        # This delay is very carefully selected, as it makes makes the spinup feelfaster!!!
-        local -r delay='0.48'
-        # I picked 230 because it's slightly too high, you'll feel happy abouta fast spin time ;_
-        i=420
-        while ps a | awk '{print $1}' | grep -q "${pid}"; do
-                echo -ne "${BWhite}>> T-Minus $i to full initialization...${Color_Off}\r"
-                : $((i--))
-                sleep "$delay"
-        done
-        printf "    \b\b\b\b"
-}
 waitabit() {
         local -r pid="${1}"
-        # This delay is very carefully selected, as it makes makes the spinup feelfaster!!!
         local -r delay='0.38'
-        # I picked 230 because it's slightly too high, you'll feel happy abouta fast spin time ;_
         i=420
         while ps a | awk '{print $1}' | grep -q "${pid}"; do
                 : $((i--))
@@ -105,18 +75,20 @@ fi
 
 ###########################################################################################################
 # Help Menu
-# 
+#
 function usage() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  Initialize one axiom instance with differnet options, such as image, region, size and axiom deployment profiles"
         echo -e "${BWhite}Examples:${Color_Off}"
-        echo -e "  ${Blue}axiom-init${Color_Off} # provision instance with random name"
-        echo -e "  ${Blue}axiom-init --deploy desktop ${Color_Off}# provision instance with random name, then deploy axiom profile 'desktop'"
-        echo -e "  ${Blue}axiom-init testy01${Color_Off} # provision instance named testy01"
-        echo -e "  ${Blue}axiom-init stok01 --region nyc3 --image axiom-default-1635920849 --size s-1vcpu-2gb --deploy desktop --shell${Color_Off}"
+        echo -e "  ${Green}axiom-init --run${Color_Off} # provision instance with random name"
+        echo -e "  ${Green}axiom-init --deploy desktop ${Color_Off}# provision instance with random name, then deploy axiom profile 'desktop'"
+        echo -e "  ${Green}axiom-init testy01${Color_Off} # provision instance named testy01"
+        echo -e "  ${Green}axiom-init stok01 --region nyc3 --image axiom-default-1635920849 --size s-1vcpu-2gb --deploy desktop --shell${Color_Off}"
         echo -e "${BWhite}Usage:${Color_Off}"
         echo -e "  <name> string (optional)"
         echo -e "    Name of the instance, supplied as a positional first argument"
+        echo -e "  --run (optional)"
+        echo -e "    Create one instance with random name"
         echo -e "  --image <image name>"
         echo -e "    Manually set the image to use (default is imageid in ~/.axiom/axiom.json)"
         echo -e "  --region <region>"
@@ -129,25 +101,31 @@ function usage() {
         echo -e "    VM size to use (default is size in ~/.axiom/axiom.json)"
         echo -e "  --no-select (optional)"
         echo -e "    Dont select instance after initialization (default is to select instance)"
-        echo -e "  --domain <example.com>"
-        echo -e "    Manually specify the domain to use (default is specified by cloud provider)"
-        echo -e "  --restore <backup>"
-        echo -e "    Initialize with a previous backup"
+        echo -e "  --debug (optional)"
+        echo -e "    Run with set -xv, warning: very verbose"
         echo -e "  --help"
         echo -e "    Display this help menu"
 }
 
 ###########################################################################################################
-# Parse command line arguments 
+# Parse command line arguments
 #
+if [ $# -eq 0 ]; then
+    usage
+    exit 0
+fi
 i=0
 for arg in "$@"
 do
+    if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]]; then
+	usage
+	exit
+   fi
     i=$((i+1))
     if [[  ! " ${pass[@]} " =~ " ${i} " ]]; then
         set=false
-        if [[ "$i" == 1 ]]; then
-            instance="$1"
+        if [[ "$arg" == "--debug" ]]; then
+            set -xv
             set=true
             pass+=($i)
         fi
@@ -157,7 +135,12 @@ do
             pass+=($i)
         fi
         if [[ "$arg" == "--quiet" ]]; then
-            quiet=true          
+            quiet=true
+            set=true
+            pass+=($i)
+        fi
+        if [[ "$arg" == "--run" ]]; then
+            run=true
             set=true
             pass+=($i)
         fi
@@ -165,13 +148,6 @@ do
             no_select=true
             set=true
             pass+=($i)
-        fi
-        if [[ "$arg" == "--restore" ]]; then
-            n=$((i+1))
-            restore=$(echo ${!n})
-            set=true
-            pass+=($i)
-            pass+=($n)
         fi
         if [[ "$arg" == "--region" ]] || [[ "$arg" == "-r" ]] ; then
             n=$((i+1))
@@ -183,13 +159,6 @@ do
         if [[ "$arg" == "--deploy" ]]; then
             n=$((i+1))
             deploy=$(echo ${!n})
-            set=true
-            pass+=($i)
-            pass+=($n)
-        fi
-        if [[ "$arg" == "--domain" ]]; then
-            n=$((i+1))
-            domain=$(echo ${!n})
             set=true
             pass+=($i)
             pass+=($n)
@@ -215,38 +184,28 @@ do
             pass+=($i)
             pass+=($n)
         fi
-        if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] || [[ "$arg" == "help" ]]; then
-            usage
-            exit
-            set=true
-            pass+=($i)
-        fi
         if  [[ "$set" != "true" ]]; then
-            args="$args $arg"
+            space=" "
+            if [[ $arg =~ $space ]]; then
+              args="$args \"$arg\""
+            else
+              args="$args $arg"
+            fi
         fi
     fi
 done
 
 ###########################################################################################################
-# Display Help Menu
+# Generate name
 #
-if [[ "$*" == "--help" ]] || [[ "$*" == "-h" ]] ||  [[ "$*" == "help" ]]; then
-usage
-exit
-fi
-
-###########################################################################################################
-# Set instance name
-# TODO: clean this up
-# TODO: If gen_name is already taken, rerun gen_name
-if [ -z "$1" ] || [[ $1 =~ "--shell" ]] || [[ $1 =~ "--quiet" ]] || [[ $1 =~ "--no-select" ]] || [[ $1 =~ "--restore" ]]|| [[ $1 =~ "--region" ]] || [[ $1 =~ "-r" ]] ||  [[ $1 =~ "--deploy" ]] || [[ $1 =~ "--domain" ]] || [[ $1 =~ "--size" ]] || [[ $1 =~ "--image" ]]; then
-    name="$gen_name"
+if [ -z ${args+x} ]; then
+ name="${names[$RANDOM % ${#names[@]}]}$((10 + RANDOM % 20))"
 else
-    name="$1"
+ name=$(echo "$args" | tr -d  ' ')
 fi
 
 ###########################################################################################################
-# Get image_id from $image ( default is from axiom.json ) or from user supplied manual image id param 
+# Get image_id from $image ( default is from axiom.json ) or from user supplied manual image id param
 #
 if [ "$manual_image_id" != "false" ]
 then
@@ -254,9 +213,27 @@ then
 else
     image_id="$(get_image_id "$image")"
     if [ -z "$image_id" ]; then
-        echo -e "${BRed}An image has not been found in this region. Do you need to run 'axiom-build'?${Color_Off}"
+        echo -e "${BRed}ERROR: image ${Color_Off}[ ${BBlue}$image ${Color_Off}]${BRed} not found. you may need to run ${Color_Off}[ ${BBlue}axiom-build --setup ${Color_Off}]${BRed} to build a new image."
+        echo -e "${BRed}if you've already built an image, list all images with ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}]${BRed} and select it with ${Color_Off}[ ${BBlue}axiom-images select \$image_name${Color_Off}]"
+        echo -e "${BRed}exiting...${Color_Off}"
         exit 1
     fi
+fi
+
+###########################################################################################################
+# Check if ssh key is specified in axiom.json
+#
+if [ "$sshkey" == "" ] || [ "$sshkey" == "null" ]; then
+echo -e  "${BYellow}WARNING: sshkey not found in ~/.axiom/axiom.json. Adding ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}key as a backup."
+echo -e  "${BYellow}If ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}was not used to build the initial image ${Color_Off}[ ${BBlue}$image_id ${Color_Off}]${BYellow}, you may have to manually edit ~/.axiom/axiom.json to set the correct sshkey${Color_Off}"
+account_path=$(ls -la "$AXIOM_PATH"/axiom.json | rev | cut -d " " -f 1 | rev)
+ if [ -f ~/.ssh/axiom_rsa ] ; then
+  jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+
+ else
+  ssh-keygen -b 2048 -t rsa -f ~/.ssh/axiom_rsa -q -N ""
+  jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"  >> /dev/null 2>&1
+ fi
 fi
 
 ###########################################################################################################
@@ -268,7 +245,7 @@ other_commands() {
     echo "Cleaning up created resources..."
     kill -9  "$PID"
     "$AXIOM_PATH"/interact/axiom-rm "$gen_name" -f
-        echo "Thank you for using axiom :) - @pry0cc"
+        echo "Thank you for using ax :) "
         exit
 }
 
@@ -285,16 +262,16 @@ then
     sleep 20
     ip="$(instance_ip "$name")"
     ssh-keygen -R "[$ip]:2266" >>  /dev/null 2>&1
-    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!"
+    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!${Color_Off}"
 else
 
 ###########################################################################################################
 # Create instance
 #
-echo -e "${BWhite}Initializing '$name' at '$region' with image '$image'"
+echo -e "${BWhite}Initializing '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$region${Color_Off}${BWhite}' with image '${BGreen}$image${Color_Off}${BWhite}'"
 # echo deployment profile when needed
 if [ "$deploy" != false ]; then
-    echo -e "${BWhite}Deploying '$deploy' after init${Color_Off}"
+    echo -e "${BWhite}Deploying '${BGreen}$deploy${Color_Off}${BWhite}' after init${Color_Off}"
 fi
 echo -e "${BWhite}INITIALIZING IN 5 SECONDS, CTRL+C to quit... ${Color_Off}"
 sleep 5
@@ -304,8 +281,7 @@ create_instance "$name" "$image_id" "$size" "$region" &
 PID="$!"
 "$NOTIFY_CMD" "Axiom Info" "Initializing '$name'..."
 
-show_spinner "$PID"
-secs=$((20))
+secs=$((280))
 while [ $secs -gt 0 ]; do
  echo -ne "${BWhite}>> T-Minus $secs to full initialization...${Color_Off}\r"
  sleep 1
@@ -315,7 +291,7 @@ done
 ip="$(instance_ip "$name")"
 ssh-keygen -R "[$ip]:2266" >>  /dev/null 2>&1
 >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!"
->&2 echo -e "${BWhite}To connect, run '${BGreen}axiom-ssh $name${Color_Off}'${BWhite} or '${BGreen}axiom-connect'${Color_Off}"
+>&2 echo -e "${BWhite}To connect, run '${BGreen}axiom-ssh $name${Color_Off}'${BWhite}${Color_Off}"
 "$NOTIFY_CMD" "Axiom Info" "$name successfully initialized at $ip!"
 fi
 
@@ -324,13 +300,6 @@ fi
 #
 if [[ "$no_select" != "true" ]]; then
     echo "$name" > "$AXIOM_PATH"/selected.conf
-fi
-
-###########################################################################################################
-# restore flag
-#
-if [ "$restore" != false ]; then
-    "$AXIOM_PATH"/interact/axiom-restore "$restore" "$name"
 fi
 
 ###########################################################################################################
@@ -350,5 +319,5 @@ echo "{\"init\":\"$name\",\"ip\":\"$ip\",\"time\":\"$starttime\",\"region\":\"$r
 #
 if [[ $shell == "true" ]];
 then
-    axiom-ssh $name
+    axiom-ssh $name  -o StrictHostKeyChecking=no
 fi

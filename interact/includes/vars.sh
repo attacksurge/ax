@@ -1,4 +1,7 @@
-names=("aspen" "austin" "bango" "banzai" "bartik" "bassi" "batman" "beaver" "bell" "benz" "blink" "borg" "bose" "boyd" "buck" "cage" "cannon" "cass" "cerf" "chell" "clarke" "cohen" "colden" "cori" "cray" "darwin" "dawgyg" "diffie" "dirac" "elion" "ellis" "euler" "fermi" "fire" "fisher" "fox" "gates" "gauss" "ghost" "gould" "haddix" "haibt" "hertz" "hickey" "hoover" "hopper" "hugle" "hunt" "jang" "jarvis" "jepsen" "jobs" "joliot" "jones" "kalam" "kare" "keller" "kepler" "kilby" "kirch" "knox" "knuth" "lamar" "lamp" "lande" "leaky" "leder" "leman" "lewin" "liskov" "loka" "luke" "lupin" "martho" "mato" "max" "mayer" "mclean" "medin" "mendel" "merkle" "mog" "moore" "morse" "moser" "murdo" "nagli" "napier" "nash" "nat" "neum" "newton" "night" "nobel" "noyce" "octavian" "ofjaaah" "omnom" "pani" "pare" "pasa" "payne" "pdelteil" "perl" "pikpikcu" "poba" "pry" "raman" "rez" "rhodes" "rich" "ride" "robin" "rubin" "saha" "sammet" "securibee" "sandeep" "snyder" "stok" "stone" "suther" "swartz" "tesla" "thl" "thomp" "todayisnew" "tu" "turing" "victoni" "vince" "wright" "wu" "xpn")
+AXIOM_PATH="$HOME/.axiom"
+
+# Random Names to Use for Fleet and Init
+names=("amir" "aspen" "austin" "bango" "banzai" "bartik" "bassi" "batman" "beaver" "bell" "benz" "blink" "borg" "bose" "boyd" "buck" "cannon" "cerf" "chell" "clarke" "cohen" "colden" "cori" "cray" "ctbb" "darwin" "dawgyg" "diffie" "dirac" "elion" "ellis" "euler" "fermi" "fire" "fisher" "fox" "gates" "gauss" "ghost" "gould" "haddix" "haibt" "hertz" "hickey" "hoover" "hopper" "hugle" "hunt" "jang" "jarvis" "jepsen" "jobs" "joliot" "jones" "kalam" "kare" "keller" "kepler" "kilby" "kirch" "knox" "knuth" "lamar" "lamp" "lande" "leaky" "leder" "leman" "lewin" "liskov" "loka" "luke" "lupin" "martho" "mato" "max" "mayer" "mclean" "medin" "mendel" "merkle" "mog" "moore" "morse" "moser" "murdo" "nagli" "napier" "nash" "nat" "neum" "newton" "night" "nobel" "noyce" "octavian" "ofjaaah" "omnom" "pani" "pare" "pasa" "payne" "pdelteil" "perl" "pikpikcu" "poba" "pry" "raman" "rez" "rhodes" "rich" "ride" "robin" "rubin" "rt-bast" "saha" "sammet" "sandeep" "securibee" "snyder" "stok" "stone" "suther" "swartz" "tesla" "thl" "thomp" "todayisnew" "tu" "turing" "victoni" "vince" "wright" "wu" "xpn")
 
 # Reset
 Color_Off='\033[0m'       # Text Reset
@@ -22,3 +25,64 @@ export BBlue='\033[1;34m'        # Blue
 export BPurple='\033[1;35m'      # Purple
 export BCyan='\033[1;36m'        # Cyan
 export BWhite='\033[1;37m'       # White
+
+# Versions
+export GolangVersion='1.23.0'
+export DoctlVersion='1.112.0'
+export LinodeCliVersion='5.51.0'
+export IBMCloudCliVersion='2.27.0'
+export HetznerCliVersion='1.47.0'
+export AzureCliVersion="2.64.0"
+export AWSCliVersion="2.17.45"
+
+
+# Auto Update Option
+[ -f $AXIOM_PATH/interact/includes/.auto_update ] && source $AXIOM_PATH/interact/includes/.auto_update
+
+# Shared function across all proviers, since these functions only query an ssh configuration file
+# check if instance name is in .sshconfig
+# used by axiom-scan
+instance_ip_cache() {
+    name="$1"
+    config="$2"
+    ssh_config="$AXIOM_PATH/.sshconfig"
+
+    if [[ "$config" != "" ]]; then
+        ssh_config="$config"
+    fi
+    cat "$ssh_config" | grep -A 1 "$name" | awk '{ print $2 }'
+}
+
+# check if instances are in .sshconfig
+# used by axiom-scan axiom-exec axiom-scp
+query_instances_cache() {
+    selected=""
+    ssh_conf="$AXIOM_PATH/.sshconfig"
+
+    for var in "$@"; do
+        if [[ "$var" =~ "-F=" ]]; then
+            ssh_conf="$(echo "$var" | cut -d "=" -f 2)"
+        elif [[ "$var" =~ "*" ]]; then
+            var=$(echo "$var" | sed 's/*/.*/g')
+            selected="$selected $(cat "$ssh_conf" | grep "Host " | awk '{ print $2 }' | grep "$var")"
+        else
+            if [[ $query ]]; then
+                query="$query\|$var"
+            else
+                query="$var"
+            fi
+        fi
+    done
+
+    if [[ "$query" ]]; then
+        selected="$selected $(cat "$ssh_conf" | grep "Host " | awk '{ print $2 }' | grep -w "$query")"
+    else
+        if [[ ! "$selected" ]]; then
+            echo -e "${Red}No instance supplied, use * if you want to delete all instances...${Color_Off}"
+            exit
+        fi
+    fi
+
+    selected=$(echo "$selected" | tr ' ' '\n' | sort -u)
+    echo -n "$selected"
+}

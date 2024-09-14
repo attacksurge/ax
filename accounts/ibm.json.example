@@ -1,0 +1,13 @@
+{
+  "sl_key": "<softlayer api key>",
+  "ibm_cloud_api_key": "<ibm cloud iam api key>",
+  "region": "dal13",
+  "provider": "ibm",
+  "default_size": "2048",
+  "cpu": "2",
+  "username": "<softlayer username>",
+  "sshkey": "axiom_rsa",
+  "imageid": "axiom-default-<timestamp>",
+  "op": "<redacted>",
+  "provisioner": "default"
+}

@@ -11,14 +11,14 @@ source "$AXIOM_PATH/interact/includes/functions.sh"
 
 function help() {
     echo -e "${BWhite}Usage of axiom-deploy${Color_Off}"
-    echo -e "Example Usage: ${Blue}axiom-deploy openvpn jerry01${Color_Off}"
+    echo -e "Example Usage: ${Green}axiom-deploy openvpn jerry01${Color_Off}"
     echo -e "  <profile> <instance>"
     echo -e "    Name of the instance, supplied as a positional first argument"
     echo -e "  --cache"
     echo -e "    Use SSH cache (works if recently interacted with)"
     echo -e "  --remove"
     echo -e "    Uninstall the profile"
-    echo -e "  --profiles"
+    echo -e "  --list"
     echo -e "    List profiles"
     echo -e "  --help"
     echo -e "    Display this help menu"
@@ -39,7 +39,7 @@ do
         exit 0
     fi
 
-    if [[ "$var" == "--profiles" ]]; then
+    if [[ "$var" == "--list" ]]; then
         echo -e "${BWhite}Deployment profiles${Color_Off}"
         (echo '"ID","Description"'; cat "$AXIOM_PATH/profiles/"* | jq -r '[.name,.description] | @csv')  | column -t -s, | tr -d '"' | perl -pe '$_ = "\033[0;37m$_\033[0;34m" if($. % 2)'
         exit 0
@@ -47,11 +47,13 @@ do
     done
 
     if [[ -z "$1" ]]; then
-        echo -e "${BRed}Error profile doesn't exist '$1'"
+	help
+        echo -e "${Red}Error: first argument must be a deployment profile, list all profiles with ${Green}ax deploy --list${Color_Off}"
+	exit
     fi
 
     if [[ -z "$2" ]]; then
-        echo -e "${BRed}Error no instance supplied"
+        echo -e "${Red}Error: second argument must be an instance name, list all instances with ${Green}ax ls${Color_Off}"
         exit 0
     fi
 
@@ -74,11 +76,11 @@ do
             chmod +x "$script"
 
         if [[ "$count" -gt 1 ]]; then
-            echo -e "${BWhite}Uploading profile to '$query'${Color_Off}${Blue}"
+            echo -e "${BWhite}Uploading profile to '$query'${Color_Off}${BGreen}"
             axiom-scp "$script" "$query":"/tmp/$id.sh" --cache
             axiom-exec "/tmp/$id.sh" -i "$query" --cache
             echo -e "${BGreen}Installation Successful!${Color_Off}"
-            echo -e "${BWhite}Notes${Color_Off}${Blue}"
+            echo -e "${BWhite}Notes${Color_Off}${BGreen}"
             jq -r ".notes" "$prof_path"
             echo -e -n "${Color_Off}"
         else

@@ -46,15 +46,14 @@
         "mv /tmp/configs/sshd_config /etc/ssh/sshd_config",
         "mv /tmp/configs/00-header /etc/update-motd.d/00-header",
         "mv /tmp/configs/authorized_keys /home/op/.ssh/authorized_keys",
-        "mv /tmp/configs/config.ini /home/op/.config/amass/config.ini",
         "mv /tmp/configs/tmux-splash.sh /home/op/bin/tmux-splash.sh",
         "/bin/su -l op -c 'sudo chmod 600 /home/op/.ssh/authorized_keys'",
         "chown -R op:users /home/op",
         "sudo service sshd restart",
         "chmod +x /etc/update-motd.d/00-header",
 
-        "echo 'Installing Golang 1.22.2'",
-        "wget -q https://golang.org/dl/go1.22.2.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz && rm go1.22.2.linux-amd64.tar.gz",
+        "echo 'Installing Golang {{ user `golang_version` }}'",
+        "wget -q https://golang.org/dl/go{{ user `golang_version` }}.linux-amd64.tar.gz && sudo tar -C /usr/local -xzf go{{ user `golang_version` }}.linux-amd64.tar.gz && rm go{{ user `golang_version` }}.linux-amd64.tar.gz",
         "export GOPATH=/home/op/go",
 
         "echo 'Installing Docker'",
@@ -74,18 +73,18 @@
         "/bin/su -l root -c 'echo \"net.ipv4.ip_local_port_range = 1024 65535\" | sudo tee -a /etc/sysctl.conf'",
         "/bin/su -l root -c 'echo \"1024 65535\" | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range'",
 
-        "echo 'Downloading Wordlists'",
+        "echo 'Downloading Files and Lists'",
 
         "echo 'Downloading axiom-dockerfiles'",
-        "git clone https://github.com/0xtavian/minimal-pentesting-dockerfiles.git /home/op/lists/axiom-dockerfiles",
+        "git clone https://github.com/attacksurge/dockerfiles.git /home/op/lists/axiom-dockerfiles",
         "echo 'Downloading permutations'",
         "wget -q -O /home/op/lists/permutations.txt https://gist.github.com/six2dez/ffc2b14d283e8f8eff6ac83e20a3c4b4/raw",
         "echo 'Downloading resolvers'",
-        "wget -q -O /home/op/lists/resolvers.txt https://raw.githubusercontent.com/trickest/resolvers/main/resolvers.txt",
+        "wget -q -O /home/op/lists/resolvers.txt https://raw.githubusercontent.com/trickest/resolvers/master/resolvers.txt",
         "echo 'Downloading trusted resolvers'",
-        "wget -q -O /home/op/lists/resolvers_trusted.txt https://raw.githubusercontent.com/six2dez/resolvers_reconftw/main/resolvers_trusted.txt",
+        "wget -q -O /home/op/lists/resolvers_trusted.txt https://raw.githubusercontent.com/six2dez/resolvers_reconftw/master/resolvers_trusted.txt",
         "echo 'Downloading fuzz wordlist'",
-        "wget -O /home/op/lists/fuzz_wordlist.txt https://raw.githubusercontent.com/six2dez/OneListForAll/main/onelistforallmicro.txt",
+        "wget -O /home/op/lists/fuzz_wordlist.txt https://raw.githubusercontent.com/six2dez/OneListForAll/master/onelistforallmicro.txt",
 
         "echo 'Installing Tools'",
 
@@ -95,8 +94,8 @@
         "echo 'Installing Amass'",
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/owasp-amass/amass/v3/...@master'",
 
-        "echo 'Installing axiom'",
-        "/bin/su -l op -c 'git clone https://github.com/pry0cc/axiom.git /home/op/.axiom && cd /home/op/.axiom/interact && ./axiom-configure --shell zsh --unattended'",
+        "echo 'Installing ax framework'",
+        "/bin/su -l op -c 'git clone https://github.com/attacksurge/ax.git /home/op/.axiom && cd /home/op/.axiom/interact && ./axiom-configure --shell zsh --unattended --setup'",
 
         "echo 'Installing commix'",
         "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/commix/Dockerfile -t axiom/commix'",
@@ -134,6 +133,7 @@
         "echo 'Installing github-endpoints'",
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/gwen001/github-endpoints@latest'",
 
+
         "echo 'Installing google-chrome'",
         "wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && cd /tmp/ && sudo apt install -y /tmp/chrome.deb -qq && apt --fix-broken install -qq",
 
@@ -159,8 +159,8 @@
         "git clone https://github.com/blechschmidt/massdns.git /tmp/massdns; cd /tmp/massdns; make -s; sudo mv bin/massdns /usr/bin/massdns",
 
         "echo 'Installing nmap'",
-        "sudo apt-get -qy --no-install-recommends install build-essential libssl-dev flex bison",
-        "/bin/su -l op -c 'wget https://nmap.org/dist/nmap-7.92.tgz -O /home/op/recon/nmap.tar.gz && cd /home/op/recon/ && tar zxf nmap.tar.gz --transform s/nmap-7.92/nmap/ && rm nmap.tar.gz && cd /home/op/recon/nmap/ && sudo ./configure --without-ndiff --without-zenmap --without-nping  --without-ncat --without-nmap-update --with-libpcap=included && sudo make && sudo make install'",
+	"sudo apt-get -qy --no-install-recommends install alien",
+	"/bin/su -l op -c 'wget https://nmap.org/dist/nmap-7.94-1.x86_64.rpm -O /home/op/recon/nmap.rpm && cd /home/op/recon/ && sudo alien ./nmap.rpm && sudo dpkg -i ./nmap*.deb'",
 
         "echo 'Installing nuclei'",
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest && /home/op/go/bin/nuclei'",
@@ -209,8 +209,6 @@
         "/bin/su -l op -c 'go install github.com/projectdiscovery/nuclei/v2/cmd/nuclei@latest'",
         
         "/bin/su -l root -c 'apt-get clean'",
-        "echo \"The password for user op is: {{ user `op_random_password` }}\"",
-        "echo \"CgpDb25ncmF0dWxhdGlvbnMsIHlvdXIgYnVpbGQgaXMgYWxtb3N0IGRvbmUhCgogICAgICAgICAgICAgYXhpb20gaXMgc3BvbnNvcmVkIGJ5Li4uCl9fX18gICAgICAgICAgICAgICAgICAgICAgIF8gXyAgICAgICAgX19fX18uICAgICAgICAgXyBfCi8gX19ffCAgX19fICBfX18gXyAgIF8gXyBfXyhfKSB8XyBfICAgfF8gICBffCBfXyBfXyBfKF8pIHxfX18KXF9fXyBcIC8gXyBcLyBfX3wgfCB8IHwgJ19ffCB8IF9ffCB8IHwgfHwgfHwgJ19fLyBfYCB8IHwgLyBfX3wKIF9fXykgfCAgX18vIChfX3wgfF98IHwgfCAgfCB8IHxffCB8X3wgfHwgfHwgfCB8IChffCB8IHwgXF9fIFwKfF9fX18vIFxfX198XF9fX3xcX18sX3xffCAgfF98XF9ffFxfXywgfHxffHxffCAgXF9fLF98X3xffF9fXy8KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHxfX18vCgpSZWFkIHRoZXNlIHdoaWxlIHlvdSdyZSB3YWl0aW5nIHRvIGdldCBzdGFydGVkIDopCgogICAgLSBRdWlja3N0YXJ0IEd1aWRlOiBodHRwczovL2dpdGh1Yi5jb20vcHJ5MGNjL2F4aW9tL3dpa2kvQS1RdWlja3N0YXJ0LUd1aWRlCiAgICAtIEZpbGVzeXN0ZW0gVXRpbGl0aWVzOiBodHRwczovL2dpdGh1Yi5jb20vcHJ5MGNjL2F4aW9tL3dpa2kvRmlsZXN5c3RlbS1VdGlsaXRpZXMKICAgIC0gRmxlZXRzOiBodHRwczovL2dpdGh1Yi5jb20vcHJ5MGNjL2F4aW9tL3dpa2kvRmxlZXRzICAgICAKICAgIC0gU2NhbnM6IGh0dHBzOi8vZ2l0aHViLmNvbS9wcnkwY2MvYXhpb20vd2lraS9TY2FucwoKCg==\" | base64 -d",
         "touch /home/op/.z",
         "chown -R op:users /home/op",
         "chown root:root /etc/sudoers /etc/sudoers.d -R"

@@ -1,0 +1,11 @@
+{
+  "linode_key": "<linode api key>",
+  "region": "us-east",
+  "provider": "linode",
+  "default_size": "g6-standard-1",
+  "sshkey": "axiom_rsa",
+  "op": "<redacted>",
+  "imageid": "axiom-default-<timestamp>",
+  "provisioner": "default"
+}
+

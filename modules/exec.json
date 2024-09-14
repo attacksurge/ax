@@ -1,4 +1,6 @@
-[{
-"command": "/bin/bash input | tee output",
-"ext":"txt"
-}]
+[
+  {
+    "command": "/bin/bash input | tee output",
+    "ext": "txt"
+  }
+]

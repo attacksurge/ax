@@ -6,7 +6,7 @@
       "image_label":  "{{ user `snapshot_name` }}",
       "instance_label": "{{ user `snapshot_name` }}",
       "image_description":"Axiom image",
-      "linode_token": "{{ user `do_key` }}",
+      "linode_token": "{{ user `linode_key` }}",
       "image": "linode/ubuntu20.04",
       "region": "{{ user `region`  }}",
 	  "instance_type": "g6-nanode-1"

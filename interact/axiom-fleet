@@ -39,14 +39,16 @@ image=false
 cycle_regions=false
 region_array=()
 gen_name=""
-provider="$(jq -r ".provider" "$AXIOM_PATH/axiom.json")"
-image_name="$(jq -r '.imageid' "$AXIOM_PATH"/axiom.json)"
+provider="$(jq -r ".provider" "$AXIOM_PATH"/axiom.json)"
+image="$(jq -r '.imageid' "$AXIOM_PATH"/axiom.json)"
 region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
+sshkey="$(jq -r '.sshkey' "$AXIOM_PATH"/axiom.json)"
 image_id=""
 instances=false
 time=320
 init_timeout=4
 init_sleep=4
+manual_image_id=false
 
 ###########################################################################################################
 # DO Region Transfer
@@ -58,7 +60,7 @@ if [[ "$provider" == "do" ]]; then
  requested_image_id_regions="$regionargs"
  if [[ "$avail_image_id_regions" != *"$requested_image_id_regions"* ]]; then
   echo -e "${Color_Off}]"
-  echo -e "${BYellow}instance ${Blue}"$name"${BYellow} requested image in region ${BRed}$regionargs${BYellow}, however image ${BRed}$image_name${BYellow} only exists in ${BRed}$(echo $avail_image_id_regions | tr '\n' ',')"
+  echo -e "${BYellow}instance ${BGreen}"$name"${BYellow} requested image in region ${BRed}$regionargs${BYellow}, however image ${BRed}$image${BYellow} only exists in ${BRed}$(echo $avail_image_id_regions | tr '\n' ',')"
   echo -e "${BYellow}axiom will attempt to transfer image to new region, this can take a few minutes please be patient...${Color_Off}"
   doctl compute image-action transfer $image_id --region $regionargs --wait
    if [ $? -eq 0 ]; then
@@ -68,9 +70,9 @@ if [[ "$provider" == "do" ]]; then
    else
     echo -e "${BRed}image transfer failed... you might need to pick a different region. '${BWhite}axiom-region ls${BRed}' to list regions. '${BWhite}axiom-images ls${BRed}' to list images${Color_Off}"
    fi
- echo -n -e "${BWhite}Instances: ${Color_Off}[ ${Blue}"
+ echo -n -e "${BWhite}Instances: ${Color_Off}[ ${BGreen}"
  fi
-echo -n -e ${Blue}
+echo -n -e ${BGreen}
 fi 
 }
 
@@ -78,19 +80,23 @@ fi
 # Help Menu
 # 
 function usage() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  Spin up fleets of axiom instances in one or multiple regions."
         echo -e "  Specify the name of your fleet (fleet prefix) or have axiom choose for you."
         echo -e "${BWhite}Examples:${Color_Off}"
-        echo -e "  ${Blue}axiom-fleet${Color_Off} # Spin up three instances, let axiom decide on the fleet prefix"
-        echo -e "  ${Blue}axiom-fleet -i 10${Color_Off} # Spin up 10 instances with random fleet prefix"
-        echo -e "  ${Blue}axiom-fleet jerry -i 25 --regions dal13,lon06,fra05,tok05,syd05${Color_Off} # Spin up 25 instances named jerry01 to jerry25 using Round-robin region distribution"
+        echo -e "  ${BGreen}axiom-fleet ctbb ${Color_Off} # Spin up 3 instances named ctbb01 ctbb02 and ctbb03"
+        echo -e "  ${BGreen}axiom-fleet -i 10${Color_Off} # Spin up 10 instances with random fleet prefix"
+        echo -e "  ${BGreen}axiom-fleet jerry -i 25 --regions dal13,lon06,fra05${Color_Off} # Spin up 25 instances named jerry01 to jerry25 using Round-robin region distribution"
         echo -e "${BWhite}Usage:${Color_Off}"
-        echo -e "  -i/--instances <integer>"
+        echo -e "  <fleet prefix> (optional)"
+        echo -e "    Name of fleet prefix (default is random fleet prefix)"
+        echo -e "  -i/--instances <required integer>"
         echo -e "    The number of instances to spin up"
         echo -e "  -r/--regions <regions> (optional)"
         echo -e "    Supply comma-separated regions to cycle through (default is region in ~/.axiom/axiom.json)"
-        echo -e "  --debug (optional)"            
+        echo -e "  --image <image name> (optional)"
+        echo -e "    Manually set the image to use (default is imageid in ~/.axiom/axiom.json)"
+        echo -e "  --debug (optional)"
         echo -e "    Run with set -xv, warning: very verbose"
         echo -e "  --help (optional)"
         echo -e "    Display this help menu"
@@ -99,17 +105,20 @@ function usage() {
 ###########################################################################################################
 # Parse command line arguments 
 #
+if [ $# -eq 0 ]; then
+    usage
+    exit 0
+fi
 i=0
 for arg in "$@"
 do
+    if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] ; then
+	usage
+	exit
+    fi
     i=$((i+1))
     if [[  ! " ${pass[@]} " =~ " ${i} " ]]; then
         set=false
-        if [[ "$i" == 1 ]]; then
-            instance="$1"
-            set=true
-            pass+=($i)
-        fi
         if [[ "$arg" == "--debug" ]]; then
             set -xv
             set=true
@@ -136,26 +145,24 @@ do
             set=true
             pass+=($i)
             pass+=($n)
-        fi
-        if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] || [[ "$arg" == "help" ]]; then
-            usage
-            exit
+	fi
+        if [[ "$arg" == "--image-id" ]]; then
+            n=$((i+1))
+            manual_image_id=$(echo ${!n})
             set=true
             pass+=($i)
+            pass+=($n)
         fi
         if  [[ "$set" != "true" ]]; then
-            args="$args $arg"
+            space=" "
+            if [[ $arg =~ $space ]]; then
+              args="$args \"$arg\""
+            else
+              args="$args $arg"
+            fi
         fi
     fi
 done
-
-###########################################################################################################
-# Display Help Menu
-#
-if [[ "$*" == "--help" ]] || [[ "$*" == "-h" ]] ; then
-usage
-exit
-fi
 
 ###########################################################################################################
 # If -i /--instances isnt used, default to three instances
@@ -165,14 +172,12 @@ if [[ "$amount" == "false" ]]; then
 fi
 
 ###########################################################################################################
-# Generate name TODO clean up
+# Generate name
 #
-if [ -z "$1" ] || [[ $1 =~ "-i" ]] || [[ $1 =~ "--instances" ]]|| [[ $1 =~ "-r" ]] || [[ $1 =~ "--regions" ]] || [[ $1 =~ "--image" ]] ; then                                                
+if [ -z ${args+x} ]; then 
  gen_name="${names[$RANDOM % ${#names[@]} ]}"
 else
- if [ ! -z "$1" ]; then
-  gen_name="$1"
- fi
+ gen_name=$(echo "$args" | tr -d ' ')
 fi
 
 ###########################################################################################################
@@ -183,17 +188,49 @@ if [[ "$provider" == "linode" ]]; then
 fi
 
 ###########################################################################################################
+# Get image_id from $image ( default is from axiom.json ) or from user supplied manual image id param
+#
+if [ "$manual_image_id" != "false" ]
+then
+    image_id="$manual_image_id"
+else
+    image_id="$(get_image_id "$image")"
+    if [ -z "$image_id" ]; then
+        echo -e "${BRed}ERROR: image ${Color_Off}[ ${BBlue}$image ${Color_Off}]${BRed} not found. you may need to run ${Color_Off}[ ${BBlue}axiom-build --setup ${Color_Off}]${BRed} to build a new image."
+        echo -e "${BRed}if you've already built an image, list all images with ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}]${BRed} and select it with ${Color_Off}[ ${BBlue}axiom-images select \$image_name${Color_Off}]"
+        echo -e "${BRed}exiting...${Color_Off}"
+        exit 1
+    fi
+fi
+
+###########################################################################################################
+# Check if ssh key is specified in axiom.json
+#
+if [ "$sshkey" == "" ] || [ "$sshkey" == "null" ]; then
+echo -e  "${BYellow}WARNING: sshkey not found in ~/.axiom/axiom.json. Adding ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}key as a backup."
+echo -e  "${BYellow}If ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}was not used to build the initial image ${Color_Off}[ ${BBlue}$image_id ${Color_Off}]${BYellow}, you may have to manually edit ~/.axiom/axiom.json to set the correct sshkey${Color_Off}"
+account_path=$(ls -la "$AXIOM_PATH"/axiom.json | rev | cut -d " " -f 1 | rev)
+ if [ -f ~/.ssh/axiom_rsa ] ; then
+  jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+
+ else
+  ssh-keygen -b 2048 -t rsa -f ~/.ssh/axiom_rsa -q -N ""
+  jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"  >> /dev/null 2>&1
+ fi
+fi
+
+
+###########################################################################################################
 # Initialize fleet
 #
 if [[ "$cycle_regions" == "false" ]]; then
 
 # Chance to cancel initialization of fleet
 #
-echo -e "${BWhite}Initializing new fleet '$gen_name' with $amount instances...${Color_Off}"
+echo -e "${BWhite}Initializing new fleet '${BGreen}$gen_name${BWhite}' with '${BGreen}$amount${BWhite}' instances using image '${BGreen}$image${BWhite}' in region '${BGreen}$region${BWhite}'${Color_Off}...${Color_Off}"
 echo -e "${BWhite}INITIALIZING IN 5 SECONDS, CTRL+C to quit... ${Color_Off}"
 sleep 5
 
-image_id=$(get_image_id "$image_name")
 total=$(query_instances "$gen_name*" | tr " " "\n" | sed 's/[^0-9]*//g'| sort -nr | head -n1)
 total="${total#0}"
 start="${start#0}"
@@ -203,13 +240,13 @@ start=$((start+1))
 total_spend_per_instance_rounded="0"
 slug=$(cat "$AXIOM_PATH"/axiom.json | jq -r .default_size)  >/dev/null 2>&1
 
-echo -n -e "${BWhite}Instances: ${Color_Off}[ ${Blue}"
+echo -n -e "${BWhite}Instances: ${Color_Off}[ ${BGreen}"
 o=0
 for i in $(seq -f "%02g" $start $amount)
 do
  time=$((time+3))
  name="$gen_name$i"
- echo -n -e "$name "
+ echo -n -e "${BGreen}$name ${Color_Off}"
  args=""
 "$AXIOM_PATH"/interact/axiom-init "$name" --quiet --size "$slug" --image-id "$image_id" --no-select --region  "$region" &
 sleep $init_sleep
@@ -232,11 +269,10 @@ if [[ "$cycle_regions" != "false" ]]; then
 ###########################################################################################################
 # Chance to cancel initialization of fleet
 #
-echo -e "${BWhite}Initializing new fleet '$gen_name' with $amount instances...${Color_Off}"
-echo -e "${BWhite}Cycling through following regions:$cycle_regions...${Color_Off}"
+echo -e "${BWhite}Initializing new fleet '${BGreen}$gen_name${BWhite}' with '${BGreen}$amount${BWhite}' instances using image '${BGreen}$image${Color_Off}'...${Color_Off}"
+echo -e "${BWhite}Cycling through following regions:${BGreen}$cycle_regions${BWhite}...${Color_Off}"
 echo -e "${BWhite}INITIALIZING IN 5 SECONDS, CTRL+C to quit... ${Color_Off}"
 sleep 5
-image_id=$(get_image_id "$image_name")
 total=$(query_instances "$gen_name*" | tr " " "\n" | sed 's/[^0-9]*//g'| sort -nr | head -n1)
 total="${total#0}"
 start="${start#0}"
@@ -268,13 +304,13 @@ for i in "${!regions_to_cycle[@]}"; do
   [ -n "${regions_to_cycle[$i]}" ] || unset "regions_to_cycle[$i]" && regions_to_cycle=( "${regions_to_cycle[@]}" )
 done
 
-echo -n -e "${BWhite}Instances: ${Color_Off}[ ${Blue}"
+echo -n -e "${BWhite}Instances: ${Color_Off}[ ${BGreen}"
 o=0
 for i in $(seq -f "%02g" $start $amount)
 do
 time=$((time+3))
 name="$gen_name$i"
-echo -n -e "$name "
+echo -n -e "${BGreen}$name ${Color_Off}"
 args=""
 regionargs="${regions_to_cycle[o]}"
 
@@ -308,4 +344,4 @@ while [[ $time -gt 0 ]]; do
 done
 "$AXIOM_PATH"/interact/axiom-select "$gen_name*"
 
-echo -e "${BGreen}Fleet started succesfully!\nTo delete your fleet, just run '${Blue}axiom-rm \"$gen_name*\" -f${BGreen}'${Color_Off}"
+echo -e "${BGreen}Fleet started succesfully!\nTo delete your fleet, just run '${BGreen}axiom-rm \"$gen_name*\" -f${BGreen}'${Color_Off}"

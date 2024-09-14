@@ -1,0 +1,13 @@
+{
+  "aws_access_key": "<aws access key>",
+  "aws_secret_access_key": "aws secret access key",
+  "group_owner_id": "<group owner id>",
+  "security_group_id": "<security group id>",
+  "region": "us-west-2",
+  "provider": "aws",
+  "default_size": "t2.medium",
+  "imageid": "axiom-default-<timestamp>",
+  "sshkey": "axiom_rsa",
+  "provisioner": "default"
+
+}

@@ -1,0 +1,10 @@
+{
+  "hetzner_key": "<hetzner api key>",
+  "region": "nbg1",
+  "provider": "hetzner",
+  "default_size": "cx22",
+  "sshkey": "axiom_rsa",
+  "op": "<redacted>",
+  "imageid": "axiom-default-<timestamp>",
+  "provisioner": "default"
+}

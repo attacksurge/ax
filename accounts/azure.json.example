@@ -1,0 +1,14 @@
+{
+  "client_id": "<client id",
+  "client_secret": "<client secret>",
+  "tenant_id": "<tenant id>",
+  "subscription_id": "<subscription_id>",
+  "region": "eastus",
+  "sshkey": "axiom_rsa",
+  "resource_group": "axiom",
+  "provider": "azure",
+  "default_size": "Standard_B1ls",
+  "use_azure_cli_auth": "true",
+  "imageid": "axiom-default-<timestamp>",
+  "provisioner": "default"
+}

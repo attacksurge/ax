@@ -1,4 +1,6 @@
-[{
-	"command":"docker run -it --rm --mount type=bind,source=\"$(pwd)\",target=/data axiom/ipcdn -c \"cat data/input | /bin/ipcdn -m not | tee data/output\"",
-	"ext":"txt"
-}]
+[
+  {
+    "command": "docker run -it --rm --mount type=bind,source=\"$(pwd)\",target=/data axiom/ipcdn -c \"cat data/input | /bin/ipcdn -m not | tee data/output\"",
+    "ext": "txt"
+  }
+]

@@ -1,5 +1,6 @@
-
-[{
-	"command":"docker run --rm -i --mount type=bind,source=\"$(pwd)\",target=/data axiom/assetfinder --subs-only < input | tee output",
-	"ext":"txt"
-}]
+[
+  {
+    "command": "cat input | assetfinder --subs-only | tee output",
+    "ext": "txt"
+  }
+]

@@ -1,6 +1,20 @@
-[{
-	"command":"/home/op/go/bin/ffuf -w _wordlist_ -u _target_/FUZZ -of csv -o _output_/_cleantarget_ -ac",
-    "wordlist":"/home/op/lists/seclists/Discovery/Web-Content/big.txt",
-	"ext":"csv",
-	"threads":"1"
-}]
+[
+  {
+    "command": "/home/op/go/bin/ffuf -w _wordlist_ -u _target_/FUZZ -of csv -o output/_cleantarget_ -ac",
+    "wordlist": "/home/op/lists/seclists/Discovery/Web-Content/big.txt",
+    "ext": "csv",
+    "threads": "1"
+  },
+  {
+    "command": "/home/op/go/bin/ffuf -w _wordlist_ -u _target_/FUZZ -of all -o output/_cleantarget_ -ac",
+    "wordlist": "/home/op/lists/seclists/Discovery/Web-Content/big.txt",
+    "ext": "dir",
+    "threads": "1"
+  },
+  {
+    "command": "/home/op/go/bin/ffuf -w _wordlist_ -u _target_/FUZZ -of json -o output/_cleantarget_ -ac",
+    "wordlist": "/home/op/lists/seclists/Discovery/Web-Content/big.txt",
+    "ext": "jsonl",
+    "threads": "1"
+  }
+]

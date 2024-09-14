@@ -2,7 +2,7 @@
   "builders": [
     {
       "type": "ibmcloud",
-      "api_key": "{{ user `do_key` }}",
+      "api_key": "{{ user `sl_key` }}",
       "username": "{{ user `username` }}",
       "datacenter_name": "{{ user `region` }}",
       "base_os_code":"UBUNTU_20_64",

@@ -1,4 +1,10 @@
-[{
-	"command":"cat input | /home/op/go/bin/httpx -o output",
-	"ext":"txt"
-}]
+[
+  {
+    "command": "cat input | /home/op/go/bin/httpx -o output",
+    "ext": "txt"
+  },
+  {
+    "command": "cat input | /home/op/go/bin/httpx -json -o output",
+    "ext": "jsonl"
+  }
+]

@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-
-AXIOM_PATH="$HOME/.axiom"
-
-ans="$(cat $AXIOM_PATH/selected.conf)"
-axiom-ssh $ans

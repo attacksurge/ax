@@ -1,10 +1,10 @@
 [
-	{
-		"command":"sudo masscan -iL input -oG output",
-		"ext":"txt"
-	},
-	{
-		"command":"sudo masscan -iL input -oX output",
-		"ext":"xml"
-	}
+  {
+    "command": "sudo masscan -iL input -oG output",
+    "ext": "txt"
+  },
+  {
+    "command": "sudo masscan -iL input -oX output",
+    "ext": "xml"
+  }
 ]

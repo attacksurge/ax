@@ -1,41 +1,6 @@
 #!/usr/bin/env bash
 
 ###########################################################################################################
-#  Description:
-#    Evaluate shell one-liners or execute single commands on one or more instances in parallel                                                                                                                                                
-#    Specify the fleet prefix, or let axiom use selected.conf by default (located in ~/.axiom/selected.conf)                                                                                                                                  
-#    Optionally execute command(s) in a detached tmux session on the remote instances (commands run in the background)                                                                                                                        
-#    Temporarily prevent axiom's SSH key regeneration and instead connect with a cached SSH config (default is ~/.axiom/.sshconfig)                                                                                                           
-#  Examples:                                                                                                                                                                                                                                  
-#    axiom-exec id # Execute command id across all instances currently selected.conf (located in ~/.axiom/selected.conf)
-#    axiom-exec ifconfig --fleet testy # Execute ifconfig on testy fleet, automatically select all instances in fleet testy
-#    axiom-exec 'sudo apt dist-upgrade -y' -q --cache --fleet OtherFleet --tmux MySession01 # Quietly execute command(s) inside a detacted tmux session on the remote instances with custom session name
-#    axiom-exec whoami -q --cache --sshconfig ~/.axiom/log/exec/axiom-exec+1234567890/sshconfig --fleet oldfleet --tmux # Specify the axiom SSH config to use (default is ~/.axiom/.sshconfig)
-#  Usage:
-#    <commands> required string
-#      Command(s) to run on the remote axiom instances, multiple commands can be wrapped in single or double quotes, but not required
-#    -f/--fleet/--file <fleet prefix or list of instances from a file>
-#      Fleet prefix to execute on (default is ~/.axiom/selected.conf). Automatic wildcard support. Alternatively, can be a list of instances from a file (-f/--fleet/--file myinstances.txt)
-#    -i/--instance <instance name>
-#      Single instance to execute on
-#    --tmux <optional tmux session name>
-#      Execute commands in a detacted tmux session (commands run in the background). The default tmux session name is axiom-exec+$TIMESTAMP, or supply a custom tmux session name
-#    --sshconfig <sshconfig_file> (optional string)
-#      Path to axiom's SSH config (default is ~/.axiom/.sshconfig)
-#    -q/--quiet
-#      Disable progress bar, and reduce verbosity
-#    --debug
-#      Enable debug mode (VERY VERBOSE!)
-#    --quick
-#      A faster but less reliable execution
-#    --cache
-#      Temporarily do not generate SSH config and instead connect with cached SSH config
-#    --logs
-#      Do not delete logs (logs will be stored in ~/.axiom/logs/exec/axiom-exec$TIMESTAMP)
-#    --help
-#      Display this help menu
-
-###########################################################################################################
 # Header
 #
 AXIOM_PATH="$HOME/.axiom"
@@ -71,7 +36,7 @@ instance=false
 keep_logs=false
 quick_execution=false
 pre_flight=true
-preflight_timeout=5
+preflight_timeout=10
 
 ###########################################################################################################
 # Help Menu:
@@ -80,16 +45,16 @@ preflight_timeout=5
 # TODO add axiom-scp extention for arb upload and download
 #
 function usage() {
-        echo -e "${BWhite}Description:"
+        echo -e "${BWhite}Description:${Color_Off}"
         echo -e "  Evaluate shell one-liners or execute single commands on one or more instances in parallel" 
         echo -e "  Specify the fleet prefix, or let axiom use selected.conf by default (located in ~/.axiom/selected.conf)"
-        echo -e "  Optionally execute command(s) in a detached tmux session on the remote instances (commands run in the background)" 
+        echo -e "  Execute command(s) from a detached tmux session on the remote instances" 
         echo -e "  Temporarily prevent axiom's SSH key regeneration and instead connect with a cached SSH config (default is ~/.axiom/.sshconfig)" 
         echo -e "${BWhite}Examples:${Color_Off}"
-        echo -e "  ${Blue}axiom-exec id ${Color_Off}# Execute command id across all instances currently selected.conf (located in ~/.axiom/selected.conf)"
-        echo -e "  ${Blue}axiom-exec ifconfig --fleet testy ${Color_Off}# Execute ifconfig on testy fleet, automatically select all instances in fleet testy"
-        echo -e "  ${Blue}axiom-exec 'sudo apt dist-upgrade -y' -q --cache --fleet OtherFleet --tmux MySession01 ${Color_Off}# Quietly execute command(s) inside a detacted tmux session on the remote instances with custom session name" 
-        echo -e "  ${Blue}axiom-exec whoami -q --cache --sshconfig ~/.axiom/log/exec/axiom-exec+1234567890/sshconfig --fleet oldfleet --tmux ${Color_Off}# Specify the axiom SSH config to use (default is ~/.axiom/.sshconfig)"
+        echo -e "  ${BGreen}axiom-exec id ${Color_Off}# Execute command id across all instances currently selected.conf (located in ~/.axiom/selected.conf)"
+        echo -e "  ${BGreen}axiom-exec ifconfig --fleet testy ${Color_Off}# Execute ifconfig on testy fleet, automatically select all instances in fleet testy"
+        echo -e "  ${BGreen}axiom-exec 'sudo apt dist-upgrade -y' -q --cache --fleet OtherFleet --tmux MySession01 ${Color_Off}# Quietly execute command(s) inside a detacted tmux session on the remote instances with custom session name" 
+        echo -e "  ${BGreen}axiom-exec whoami -q --cache --sshconfig ~/.axiom/log/exec/axiom-exec+1234567890/sshconfig --fleet oldfleet --tmux ${Color_Off}# Specify the axiom SSH config to use (default is ~/.axiom/.sshconfig)"
         echo -e "${BWhite}Usage:${Color_Off}"
         echo -e "  <commands> required string"
         echo -e "    Command(s) to run on the remote axiom instances, multiple commands can be wrapped in single or double quotes, but not required"
@@ -97,8 +62,8 @@ function usage() {
         echo -e "    Fleet prefix to execute on (default is ~/.axiom/selected.conf). Automatic wildcard support. Alternatively, can be a list of instances from a file (-f/--fleet/--file myinstances.txt)"   
         echo -e "  -i/--instance <instance name>"
         echo -e "    Single instance to execute on"
-        echo -e "  --tmux <optional tmux session name>"
-        echo -e "    Execute commands in a detacted tmux session (commands run in the background). The default tmux session name is axiom-exec+\$TIMESTAMP, or supply a custom tmux session name"
+#        echo -e "  --tmux <optional tmux session name>"
+#        echo -e "    Execute commands in a detacted tmux session (commands run in the background). The default tmux session name is axiom-exec+\$TIMESTAMP, or supply a custom tmux session name"
         echo -e "  --sshconfig <sshconfig_file> (optional string)"
         echo -e "    Path to axiom's SSH config (default is ~/.axiom/.sshconfig)"
         echo -e "  -q/--quiet (optional)"
@@ -200,6 +165,14 @@ do
             pass+=($i)
             pass+=($n)
         fi
+#        if  [[ "$set" != "true" ]]; then
+#            space=" "
+#            if [[ $arg =~ $space ]]; then
+#              args="$args \"$arg\""
+#            else
+#              args="$args $arg"
+#            fi
+#        fi
         if  [[ "$set" != "true" ]]; then
             args="$args $arg"
         fi
@@ -217,19 +190,33 @@ fi
 # clean_up
 #
 clean_up() {
-kill -0 $remotetailPID 2>  /dev/null && kill -9 $remotetailPID  &> /dev/null
-kill -0 $tailPID 2>  /dev/null && kill -9 $tailPID  &> /dev/null
-kill -0 $downloaderPID 2>  /dev/null && kill -9 $downloaderPID  &> /dev/null
-echo -e "${Blue}Killing remote processes in a backgroud job${Color_Off}"
-$interlace_cmd_nobar -c "$ssh_command _target_ 'tmux kill-session -t $uid'"  >/dev/null 2>&1
+
+if kill -0 $remotetailPID &> /dev/null; then
+ kill -9 $remotetailPID &> /dev/null
+ wait $remotetailPID &> /dev/null
+fi
+
+if kill -0 $downloaderPID &> /dev/null; then
+ kill -9 $downloaderPID &> /dev/null
+ wait $downloaderPID &> /dev/null
+fi
+
+if kill -0 $tailPID &> /dev/null; then
+ kill -9 $tailPID &> /dev/null
+ wait $tailPID &> /dev/null
+fi
+
+echo -e "${BGreen}Killing remote processes in a backgroud job${Color_Off}"
+$interlace_cmd_nobar -c "$ssh_command _target_ 'tmux kill-session -t $uid'"  >/dev/null 2>&1 &
 $interlace_cmd_nobar -c "$ssh_exit_command _target_ " >/dev/null 2>&1
 mv "$tmp" "$logs">/dev/null 2>&1
 if [[ $keep_logs != true ]]; then
  rm -r $logs >/dev/null 2>&1
 fi
+rm -r $socket_tmp >/dev/null 2>&1
 stty sane
 tput init
-exit 
+exit
 }
 
 ###########################################################################################################
@@ -249,7 +236,7 @@ fi
 
 ###########################################################################################################
 # Store $args in $commands
-# 
+#
 commands="$args"
 
 ###########################################################################################################
@@ -267,6 +254,7 @@ fi
 #
 completed="$tmp/status/completed/"
 inprogress="$tmp/status/inprogress/"
+mkdir -p "$logs" >> /dev/null 2>&1
 mkdir -p "$tmp/input"
 mkdir -p "$tmp/split"
 mkdir -p "$tmp/output"
@@ -294,7 +282,7 @@ socket_tmp=$(echo "$tmp/sockets")
 cat <<EOT >> $(echo $sshconfig)
 Host * 
     ControlMaster auto 
-    ControlPath $socket_tmp/%r@%h-%p  
+    ControlPath $socket_tmp/%h
     ControlPersist 600
 EOT
 
@@ -375,25 +363,33 @@ $interlace_cmd_nobar -c "axiom-scp $tmp/command _target_:$scan_dir/command --cac
 function downloader () {
 while true; do
 sleep 2
-$interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/_target_ $tmp/status/inprogress/_target_ --cache -F=$sshconfig >/dev/null 2>&1" 
-ls $tmp/status/inprogress/ | anew -q $tmp/status/completed/hosts 
+$interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/_target_ $tmp/status/inprogress/_target_ --cache -F=$sshconfig >/dev/null 2>&1"
+for host in "$tmp/status/inprogress/"*
+do
+  if [ -e "$host" ]; then
+   echo "$(basename $host)" | tee -a "$tmp/status/completed/hosts" >/dev/null 2>&1
+   sort -u "$tmp/status/completed/hosts" -o "$tmp/status/completed/hosts" >/dev/null 2>&1
+  fi
+done
+
 cat $tmp/status/completed/hosts | sort -u | wc -l | tee $tmp/status/downloader_instances  >/dev/null 2>&1
 cat $tmp/status/completed/hosts | sort -u | tee $tmp/status/downloader_hosts  >/dev/null 2>&1
 if [[ "$(cat $tmp/status/downloader_instances)" -eq "0"  ]]; then
  sleep 2
  downloader
 fi
-downloader_cmd="$(which interlace) --no-bar --silent -tL $tmp/status/downloader_hosts -threads $(cat $tmp/status/downloader_instances)" 
+downloader_cmd="$(which interlace) --no-bar --silent -tL $tmp/status/downloader_hosts -threads $(cat $tmp/status/downloader_instances)"
 if [[ "$commands" =~ "_target_" ]]; then
-$downloader_cmd -c "axiom-scp _target_:$scan_dir/output/ $tmp/output/ --cache -F=$sshconfig >/dev/null 2>&1" 
+$downloader_cmd -c "axiom-scp _target_:$scan_dir/output/ $tmp/output/ --cache -F=$sshconfig >/dev/null 2>&1"
 else
 $downloader_cmd -c "axiom-scp _target_:$scan_dir/output $tmp/output/_target_.$ext --cache -F=$sshconfig >/dev/null 2>&1"
 fi
-mv $tmp/status/completed/hosts $tmp/status/completed/hosts.tmp
-cat $tmp/status/completed/hosts.tmp | sort -u >> $tmp/status/completed/hosts
+
+# make sure the list of hostnames files downloaded was the same list you started with
+sort -u "$tmp/status/completed/hosts" -o "$tmp/status/completed/hosts" >/dev/null 2>&1
  if cmp -s $tmp/status/completed/hosts $tmp/hosts ; then
   kill -9 $(cat $tmp/status/remotetailPID)  >> /dev/null 2>&1
-  wait $(cat $tmp/status/remotetailPID)  >> /dev/null 2>&1 
+  wait $(cat $tmp/status/remotetailPID)  >> /dev/null 2>&1
  break >> /dev/null 2>&1
  else
   downloader
@@ -403,12 +399,12 @@ done
 
 ###########################################################################################################
 #  interactive mode flag
-# 
+#
 if [[ "$quick_execution" == "false" ]]; then
 
 ###########################################################################################################
 #  dont tail if quiet is true
-# 
+#
 if [[ "$quiet" == "false" ]]; then
     tail -q -f $tmp/logs/* &
     tailPID=$!
@@ -435,11 +431,11 @@ else
 fi
 
 ###########################################################################################################
-#  interactive mode logic 
+#  interactive mode logic
 #
 else
 if [[ "$nobar" == "false" ]]; then
- $interlace_cmd -c "$ssh_command _target_ '$commands'" 
+ $interlace_cmd -c "$ssh_command _target_ '$commands'"
  pid=$!
 else
  $interlace_cmd_nobar -c "$ssh_command _target_  '$commands'"
@@ -448,27 +444,6 @@ fi
 fi
 
 ###########################################################################################################
-#  keep logs flag aka --logs
-#
-mv "$tmp" "$logs">/dev/null 2>&1
-if [[ $keep_logs != true ]]; then
- rm -r $logs >/dev/null 2>&1
-fi
-
-###########################################################################################################
-#  kill tmux sessions with any orphaned proceses
-#
-$interlace_cmd_nobar -c "$ssh_command _target_ 'tmux kill-session -t $uid'"  >/dev/null 2>&1
-$interlace_cmd_nobar -c "$ssh_exit_command _target_ " >/dev/null 2>&1
-
-###########################################################################################################
 # house keeping
 #
-rm -r $socket_tmp >/dev/null 2>&1
-kill -0 $remotetailPID 2>  /dev/null && kill -9 $remotetailPID  &> /dev/null
-kill -0 $tailPID 2>  /dev/null && kill -9 $tailPID  &> /dev/null
-kill -0 $downloaderPID 2>  /dev/null && kill -9 $downloaderPID  &> /dev/null
-wait $tailPID 2>/dev/null
-wait $downloaderPID 2>/dev/null
-stty sane
-tput init
+clean_up

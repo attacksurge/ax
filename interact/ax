@@ -1,0 +1,184 @@
+#!/bin/bash
+
+###########################################################################################################
+# Header
+#
+AXIOM_PATH="$HOME/.axiom"
+source "$AXIOM_PATH/interact/includes/ax-completion.sh"
+source "$AXIOM_PATH/interact/includes/vars.sh"
+source "$AXIOM_PATH/interact/includes/functions.sh"
+source "$AXIOM_PATH/interact/includes/system-notification.sh"
+begin=$(date +%s)
+start="$(pwd)"
+BASEOS="$(uname)"
+case $BASEOS in
+'Darwin')
+    PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+    ;;
+*) ;;
+esac
+
+###########################################################################################################
+# Help Menu
+#
+function help() {
+        echo -e "${BWhite}Description:${Color_Off}"
+        echo -e "  Welcome to the Ax Framework! You can use this wrapper to execute the various axiom scripts (located in ~/.axiom/interact/)"
+        echo -e "  To supply additional arguments to a script, simply append them to the command"
+        echo -e "  For more options, print the help menu for any script (ax init, ax fleet, ax scan, ax images, etc)"
+        echo -e "  Or you could just run the scripts without the wrapper (axiom-exec for example)"
+        echo -e "${BWhite}Examples:${Color_Off}"
+        echo -e "  ${Green}ax configure --setup --shell zsh --unattended ${Color_Off} # Kick off axiom configuration wizard, add axiom to zsh path, avoid any prompts"
+        echo -e "  ${Green}ax account-setup ${Color_Off} # Kick off axiom account setup wizard"
+        echo -e "  ${Green}ax account linode ${Color_Off} # Switch to linode account (must be a valid axiom.json in ~/.axiom/accounts)"
+        echo -e "  ${Green}ax build default ${Color_Off}# Build the Packer image with the Default provisioner located in ~/.axiom/images/provisioners/default.json"
+        echo -e "  "
+        echo -e "  ${Green}ax init --run ${Color_Off}# Create axiom instance with random instane name"
+        echo -e "  ${Green}ax fleet -i 10 -r nyc1,nyc3,fra1,sfo2${Color_Off} # Spin up 10 instances with random fleet prefix using Round-robin region distribution"
+        echo -e "  ${Green}ax ls${Color_Off} # List all instances on the account"
+        echo -e "  ${Green}ax ssh testy01${Color_Off} # SSH into instance testy01"
+        echo -e "  ${Green}ax select testy\*${Color_Off} # Select all instances in testy fleet (this updates ~/.axiom/selected.conf)"
+        echo -e "  ${Green}ax scp custom-wordlist.txt 'myfleet*':/home/op/custom-wordlist.txt --split${Color_Off} # Split and upload local wordlist to all instances in myfleet"
+        echo -e "  ${Green}ax scan input.txt -m nuclei --nuclei-templates /home/localuser/custom-templates/ -o outputfile.txt${Color_Off} # Run a distributed scan, upload custom nuclei templates"
+        echo -e "  ${Green}ax rm testy\*${Color_Off} # Delete all instances in testy fleet"
+        echo -e "  ${Green}ax rm '\*'${Color_Off} # Delete all instances on the account"
+        echo -e "  "
+        echo -e "  ${Green}ax images ls ${Color_Off} # List all images on the account"
+        echo -e "  ${Green}ax images create${Color_Off} # Create a new image/snapshot of a running axiom instance"
+        echo -e "  ${Green}ax images select axiom-testy01-1710180715${Color_Off} # Select image named axiom-testy01-1710180715 to use for future ax init and ax fleet"
+        echo -e "  "
+        echo -e "  ${Green}ax sizes ls ${Color_Off} # List all available sizes (cpu and ram) to use for instances"
+        echo -e "  ${Green}ax sizes select s-4vcpu-8gb${Color_Off} # Select new default instance size to use for future axiom-init/axiom-fleet"
+        echo -e "  "
+        echo -e "  ${Green}ax power on rez\*${Color_Off} # Power on all instances in fleet 'rez'"
+        echo -e "  ${Green}ax region ls ${Color_Off} # List available regions"
+        echo -e "  ${Green}ax region select nyc1${Color_Off} # Select region 'nyc1' (this updates ~/axiom.json with the new region)"
+        echo -e "${BWhite}Usage:${Color_Off}"
+        echo -e "  account"
+        echo -e "   Select Axiom account (axiom-account)"
+        echo -e "  account-setup"
+        echo -e "   Start Axiom account setup wizard (axiom-account-setup)"
+        echo -e "  build"
+        echo -e "   Start Axiom build wizard (axiom-build)"
+        echo -e "  configure"
+        echo -e "   Display commands to manage the configuration of axiom (axiom-configure), install dependencies, kick off axiom-account-setup and axiom-build "
+        echo -e "  deploy"
+        echo -e "   Deploy a profile stored in ~/.axiom/profiles/ (axiom-deploy)"
+        echo -e "  exec"
+        echo -e "   Evaluate shell one-liners or execute single commands on one or more instances in parallel (axiom-exec)"
+        echo -e "  fleet"
+        echo -e "   Display commands to manage fleets (axiom-fleet)"
+        echo -e "  images"
+        echo -e "   Create a new snapshot of a running axiom instance, select the new snapshot to deploy future axiom instances/fleets, get and delete images (axiom-images)"
+        echo -e "  init"
+        echo -e "   Display commands to manage initializing one axiom instance with differnet options, such as image, region, size and axiom deployment profiles (axiom-init)"
+        echo -e "  ls"
+        echo -e "   List all instances on the account (axiom-ls)"
+        echo -e "  power"
+        echo -e "   Display commands to manage powering on or off instances by name (axiom-power)"
+        echo -e "  region"
+        echo -e "   Display commands to list regions or select a region (axiom-region)"
+        echo -e "  rm"
+        echo -e "   Remove instances from the account (axiom-rm)"
+        echo -e "  scan "
+        echo -e "   Display commands to manange the distribution of arbitrary binaries and scripts across fleets of Axiom instances (axiom-scan)"
+        echo -e "  scp"
+        echo -e "   Display commands used to upload and download files from fleets (axiom-scp)"
+        echo -e "  select"
+        echo -e "   Select instances to use for exec and fleet (axiom-select)"
+        echo -e "  sizes"
+        echo -e "   Manage the default instance size used by axiom-init or axiom-fleet (axiom-sizes)"
+        echo -e "  ssh"
+        echo -e "   Display commands to manage Axiom's ssh config file or connect to a specific Axiom instance (axiom-ssh)"
+        echo -e "  sync"
+        echo -e "   Make a copy of an instances home directoy and sync to your local filesystem (axiom-sync)"
+        echo -e "  update"
+        echo -e "   Run 'cd ~/.axiom && git pull' to update to the latest version! (axiom-update)"
+        echo -e "  <additional args>"
+        echo -e "   To pass additional arguments to the script, simply append them to the command!"
+}
+
+###########################################################################################################
+#  Display axiom banner and authors
+#
+banner() {
+cat << EOF >&2
+
+████████╗██╗  ██╗███████╗     █████╗ ██╗  ██╗    ███████╗██████╗  █████╗ ███╗   ███╗███████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗
+╚══██╔══╝██║  ██║██╔════╝    ██╔══██╗╚██╗██╔╝    ██╔════╝██╔══██╗██╔══██╗████╗ ████║██╔════╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝
+   ██║   ███████║█████╗      ███████║ ╚███╔╝     █████╗  ██████╔╝███████║██╔████╔██║█████╗  ██║ █╗ ██║██║   ██║██████╔╝█████╔╝
+   ██║   ██╔══██║██╔══╝      ██╔══██║ ██╔██╗     ██╔══╝  ██╔══██╗██╔══██║██║╚██╔╝██║██╔══╝  ██║███╗██║██║   ██║██╔══██╗██╔═██╗
+   ██║   ██║  ██║███████╗    ██║  ██║██╔╝ ██╗    ██║     ██║  ██║██║  ██║██║ ╚═╝ ██║███████╗╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗
+   ╚═╝   ╚═╝  ╚═╝╚══════╝    ╚═╝  ╚═╝╚═╝  ╚═╝    ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝ ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
+
+Maintainer: 0xtavian
+EOF
+echo ''
+echo '
+ "𝓲𝓷𝓼𝓹𝓲𝓻𝓮𝓭 𝓫𝔂 𝓪𝔁𝓲𝓸𝓶: 𝓽𝓱𝓮 𝓭𝔂𝓷𝓪𝓶𝓲𝓬 𝓲𝓷𝓯𝓻𝓪𝓼𝓽𝓻𝓾𝓬𝓽𝓾𝓻𝓮 𝓯𝓻𝓪𝓶𝓮𝔀𝓸𝓻𝓴 𝓯𝓸𝓻 𝓮𝓿𝓮𝓻𝔂𝓫𝓸𝓭𝔂! - @𝓹𝓻𝔂0𝓬𝓬 @0𝔁𝓽𝓪𝓿𝓲𝓪𝓷"
+ "𝓽𝓱𝓮 𝓬𝓸𝓷𝓽𝓲𝓷𝓾𝓪𝓽𝓲𝓸𝓷 𝓸𝓯 𝓪𝔁𝓲𝓸𝓶: 𝓽𝓱𝓮 𝓭𝔂𝓷𝓪𝓶𝓲𝓬 𝓲𝓷𝓯𝓻𝓪𝓼𝓽𝓻𝓾𝓬𝓽𝓾𝓻𝓮 𝓯𝓻𝓪𝓶𝓮𝔀𝓸𝓻𝓴 𝓯𝓸𝓻 𝓮𝓿𝓮𝓻𝔂𝓫𝓸𝓭𝔂! - @𝓹𝓻𝔂0𝓬𝓬 @0𝔁𝓽𝓪𝓿𝓲𝓪𝓷"
+ "𝓬𝓸𝓷𝓽𝓲𝓷𝓾𝓮𝓭 𝓯𝓻𝓸𝓶: 𝓪𝔁𝓲𝓸𝓶: 𝓽𝓱𝓮 𝓭𝔂𝓷𝓪𝓶𝓲𝓬 𝓲𝓷𝓯𝓻𝓪𝓼𝓽𝓻𝓾𝓬𝓽𝓾𝓻𝓮 𝓯𝓻𝓪𝓶𝓮𝔀𝓸𝓻𝓴 𝓯𝓸𝓻 𝓮𝓿𝓮𝓻𝔂𝓫𝓸𝓭𝔂! - @𝓹𝓻𝔂0𝓬𝓬 @0𝔁𝓽𝓪𝓿𝓲𝓪𝓷"
+ "𝓫𝓪𝓼𝓲𝓬𝓪𝓵𝓵𝔂, 𝓪𝔁𝓲𝓸𝓶: 𝓽𝓱𝓮 𝓭𝔂𝓷𝓪𝓶𝓲𝓬 𝓲𝓷𝓯𝓻𝓪𝓼𝓽𝓻𝓾𝓬𝓽𝓾𝓻𝓮 𝓯𝓻𝓪𝓶𝓮𝔀𝓸𝓻𝓴 𝓯𝓸𝓻 𝓮𝓿𝓮𝓻𝔂𝓫𝓸𝓭𝔂! - @𝓹𝓻𝔂0𝓬𝓬 @0𝔁𝓽𝓪𝓿𝓲𝓪𝓷 "
+ "𝓶𝓲𝓰𝓱𝓽 𝓪𝓼 𝔀𝓮𝓵𝓵 𝓫𝓮 𝓪𝔁𝓲𝓸𝓶: 𝓽𝓱𝓮 𝓭𝔂𝓷𝓪𝓶𝓲𝓬 𝓲𝓷𝓯𝓻𝓪𝓼𝓽𝓻𝓾𝓬𝓽𝓾𝓻𝓮 𝓯𝓻𝓪𝓶𝓮𝔀𝓸𝓻𝓴 𝓯𝓸𝓻 𝓮𝓿𝓮𝓻𝔂𝓫𝓸𝓭𝔂! - @𝓹𝓻𝔂0𝓬𝓬 @0𝔁𝓽𝓪𝓿𝓲𝓪𝓷"
+ "𝓪𝓵𝓻𝓲𝓰𝓱𝓽, 𝔂𝓸𝓾 𝓰𝓸𝓽 𝓶𝓮, 𝓲𝓽𝓼 𝓳𝓾𝓼𝓽 𝓪𝔁𝓲𝓸𝓶: 𝓽𝓱𝓮 𝓭𝔂𝓷𝓪𝓶𝓲𝓬 𝓲𝓷𝓯𝓻𝓪𝓼𝓽𝓻𝓾𝓬𝓽𝓾𝓻𝓮 𝓯𝓻𝓪𝓶𝓮𝔀𝓸𝓻𝓴 𝓯𝓸𝓻 𝓮𝓿𝓮𝓻𝔂𝓫𝓸𝓭𝔂! - @𝓹𝓻𝔂0𝓬𝓬 @0𝔁𝓽𝓪𝓿𝓲𝓪𝓷"
+ "𝓼𝓽𝓸𝓵𝓮𝓷 𝓯𝓻𝓸𝓶: 𝓪𝔁𝓲𝓸𝓶: 𝓽𝓱𝓮 𝓭𝔂𝓷𝓪𝓶𝓲𝓬 𝓲𝓷𝓯𝓻𝓪𝓼𝓽𝓻𝓾𝓬𝓽𝓾𝓻𝓮 𝓯𝓻𝓪𝓶𝓮𝔀𝓸𝓻𝓴 𝓯𝓸𝓻 𝓮𝓿𝓮𝓻𝔂𝓫𝓸𝓭𝔂! - @𝓹𝓻𝔂0𝓬𝓬 @0𝔁𝓽𝓪𝓿𝓲𝓪𝓷"
+ ' | xargs shuf -n1 -e
+echo ''
+
+help
+}
+
+###########################################################################################################
+#  Parse command line arguments
+#
+if [ $# -eq 0 ]; then
+    banner
+    exit 0
+fi
+i=0
+for arg in "$@"
+do
+    i=$((i+1))
+    if [[  ! " ${pass[@]} " =~ " ${i} " ]]; then
+        set=false
+        if [[ "$i" == 1 ]]; then
+            input="$1"
+            set=true
+            pass+=($i)
+        fi
+        if [[ "$arg" == "--extra-args" ]]; then
+            n=$((i+1))
+            extra_args="${!n}"
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$set" != "true" ]]; then
+            if [[ "$arg" == *" "* ]]; then
+                args_for_scan+=" \"$arg\""
+            else
+                args_for_scan+=" $arg"
+            fi
+        fi
+
+        if [[ "$set" != "true" ]]; then
+            args+=" $arg"
+        fi
+
+    fi
+done
+
+if [[ -n "$extra_args" ]]; then
+  args="$args --extra-args $extra_args"
+  axiom-scan $args_for_scan --extra-args "$extra_args"
+else
+ if [[ "$input" == "scan" ]]; then
+  axiom-scan $args_for_scan
+ else
+  if test -f $AXIOM_PATH/interact/axiom-$input; then
+   axiom-$input $args
+  else
+   echo -e "${Red}Error: ${White}axiom-$input${Color_Off}${Red} script does not exist in ~/.axiom/interact${Color_Off}"
+  fi
+ fi
+fi
