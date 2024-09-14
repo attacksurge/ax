@@ -11,11 +11,10 @@ echo -e -n "${Green}Please enter your provider ($account_str): \n>> ${Color_Off}
 read provider
 provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
 
-while [[ ! -f "$provider_path" ]]; 
-do
-	echo -e -n "${Green}This is not a valid provider, please enter your a valid provider ($account_str): \n>> ${Color_Off}"
-	read provider
-	provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
+while [[ ! -f "$provider_path" ]]; do
+ echo -e -n "${Green}This is not a valid provider, please enter your a valid provider ($account_str): \n>> ${Color_Off}"
+ read provider
+ provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
 done
 
 bash "$provider_path"

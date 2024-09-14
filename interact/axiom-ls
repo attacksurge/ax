@@ -6,30 +6,29 @@ source "$AXIOM_PATH/interact/includes/functions.sh"
 current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)
 echo -e "${BWhite}Listing instances in account: $(echo $current)${Color_Off}"
 
-
 if [ -z $1 ]; then
 
-instance_pretty |  perl -pe '$_ = "\033[37m$_\033[0m" if($. % 2); $_ = "\033[32m$_\033[0m" unless ($. % 2)'
+ instance_pretty | perl -pe '$_ = "\033[37m$_\033[0m" if($. % 2); $_ = "\033[32m$_\033[0m" unless ($. % 2)'
 
 else
-	if [[ "$1" == "--json" ]]; then
-		instances
-	elif [[ "$1" == "--list" ]]; then
-		instance_list
-	elif [[ "$1" == "--appliance" ]]; then
-		pretty_appliances
-	else
-		resp=$(query_instances "$1")
-		count=$(echo $resp | tr ' ' '\n' | wc -l | awk '{ print $1 }')
+ if [[ "$1" == "--json" ]]; then
+  instances
+ elif [[ "$1" == "--list" ]]; then
+  instance_list
+ elif [[ "$1" == "--appliance" ]]; then
+  pretty_appliances
+ else
+  resp=$(query_instances "$1")
+  count=$(echo $resp | tr ' ' '\n' | wc -l | awk '{ print $1 }')
 
-		if [[ "$count" -gt 1 ]]; then
-			i=1
-			for name in $resp; do
-				echo "$i:$name"
-				i=$((i + 1))
-			done
-		else
-			instance_ip "$1"
-		fi
-	fi
+  if [[ "$count" -gt 1 ]]; then
+   i=1
+   for name in $resp; do
+    echo "$i:$name"
+    i=$((i + 1))
+   done
+  else
+   instance_ip "$1"
+  fi
+ fi
 fi

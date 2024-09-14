@@ -6,456 +6,451 @@ source "$AXIOM_PATH/interact/includes/vars.sh"
 BASEOS="$(uname)"
 case $BASEOS in
 'Linux')
-    BASEOS='Linux'
-    ;;
+ BASEOS='Linux'
+ ;;
 'FreeBSD')
-    BASEOS='FreeBSD'
-    alias ls='ls -G'
-    ;;
+ BASEOS='FreeBSD'
+ alias ls='ls -G'
+ ;;
 'WindowsNT')
-    BASEOS='Windows'
-    ;;
+ BASEOS='Windows'
+ ;;
 'Darwin')
-    BASEOS='Mac'
-    ;;
+ BASEOS='Mac'
+ ;;
 'SunOS')
-    BASEOS='Solaris'
-    ;;
+ BASEOS='Solaris'
+ ;;
 'AIX') ;;
 *) ;;
 esac
 
 accounts=$(ls -A1 "$AXIOM_PATH/accounts/" | grep "json" | sed 's/\.json//g')
-if [ -f ~/.axiom/axiom.json ] ; then
-	current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)> /dev/null 2>&1
+if [ -f ~/.axiom/axiom.json ]; then
+ current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1) >/dev/null 2>&1
 fi
 
 function bootstrap() {
-    account_helpers=$(find "$AXIOM_PATH/interact/account-helpers" -name '*.sh' ! -name 'generate*' -execdir basename -s '.sh' {} +)
-    account_str=$(echo "$account_helpers" | sed 's/ /, /g')
-    provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
-    bash "$provider_path"
+ account_helpers=$(find "$AXIOM_PATH/interact/account-helpers" -name '*.sh' ! -name 'generate*' -execdir basename -s '.sh' {} +)
+ account_str=$(echo "$account_helpers" | sed 's/ /, /g')
+ provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
+ bash "$provider_path"
 }
 
-if [ ! -z "$1" ]
-then
-    path="$AXIOM_PATH/accounts/$1.json"
-    if [[ -f "$path" ]]
-    then
-        echo -e "${BWhite}Selecting $1...${Color_Off}"
-        rm "$AXIOM_PATH/axiom.json" > /dev/null 2>&1
-        ln -s "$AXIOM_PATH/accounts/$1.json" "$AXIOM_PATH/axiom.json"
-        provider="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.provider')"
-        "$AXIOM_PATH"/interact/axiom-provider "$provider"
+if [ ! -z "$1" ]; then
+ path="$AXIOM_PATH/accounts/$1.json"
+ if [[ -f "$path" ]]; then
+  echo -e "${BWhite}Selecting $1...${Color_Off}"
+  rm "$AXIOM_PATH/axiom.json" >/dev/null 2>&1
+  ln -s "$AXIOM_PATH/accounts/$1.json" "$AXIOM_PATH/axiom.json"
+  provider="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.provider')"
+  "$AXIOM_PATH"/interact/axiom-provider "$provider"
 
+  # check installed version of doclt and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
+  #
+  if [[ "$provider" == "do" ]]; then
+   installed_version=$(doctl version 2>/dev/null | grep version | cut -d ' ' -f 3 | cut -d '-' -f 1)
 
-# check installed version of doclt and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
-#
- if [[ "$provider" == "do" ]]; then
-    installed_version=$(doctl version  2>/dev/null| grep version | cut -d ' ' -f 3 | cut -d '-' -f 1)
-
-    # Compare installed version with desired version
+   # Compare installed version with desired version
    if [[ "$(printf '%s\n' "$installed_version" "$DoctlVersion" | sort -V | head -n 1)" != "$DoctlVersion" ]]; then
-       echo "installed_version is lower than DoctlVersion $DoctlVersion ~/.axiom/interact/includes/vars.sh"
+    echo "installed_version is lower than DoctlVersion $DoctlVersion ~/.axiom/interact/includes/vars.sh"
 
     if [[ $BASEOS == "Mac" ]]; then
-            echo "Installing/updating doctl to version $DoctlVersion..."
-            wget https://github.com/digitalocean/doctl/releases/download/v${DoctlVersion}/doctl-${DoctlVersion}-darwin-amd64.tar.gz -qO- | tar -xzv -C /usr/local/bin/
-            echo "doctl updated to version $DoctlVersion."
+     echo "Installing/updating doctl to version $DoctlVersion..."
+     wget https://github.com/digitalocean/doctl/releases/download/v${DoctlVersion}/doctl-${DoctlVersion}-darwin-amd64.tar.gz -qO- | tar -xzv -C /usr/local/bin/
+     echo "doctl updated to version $DoctlVersion."
     elif [[ $BASEOS == "Linux" ]]; then
-        if uname -a | grep -qi "Microsoft"; then
-            OS="UbuntuWSL"
-        else
-            OS=$(lsb_release -i | awk '{ print $3 }')
-            if ! command -v lsb_release &> /dev/null; then
-                OS="unknown-Linux"
-                BASEOS="Linux"
-            fi
-        fi
-        if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
-            sudo pacman -Syu doctl --noconfirm
-        elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
-                echo "Installing/updating doctl to version $DoctlVersion..."
-                wget https://github.com/digitalocean/doctl/releases/download/v${DoctlVersion}/doctl-${DoctlVersion}-linux-amd64.tar.gz -qO- | sudo tar -xzv -C /usr/local/bin/
-                echo "doctl updated to version $DoctlVersion."
-        elif [[ $OS == "Fedora" ]]; then
-            echo "Needs Conversation"
-        fi
+     if uname -a | grep -qi "Microsoft"; then
+      OS="UbuntuWSL"
+     else
+      OS=$(lsb_release -i | awk '{ print $3 }')
+      if ! command -v lsb_release &>/dev/null; then
+       OS="unknown-Linux"
+       BASEOS="Linux"
       fi
-  fi
-     echo -e "${BGreen}Installing doctl packer plugin...${Color_Off}"
-        packer plugins install github.com/digitalocean/digitalocean
-
-        # Validate and initialize DigitalOcean API token
-        token="$(jq -r '.do_key' "$AXIOM_PATH"/accounts/"$1".json)"
-        if ! doctl auth list &> /dev/null; then
-         echo -e "${BRed}Doctl is not authenticated.${Color_Off} Running bootstrap..."
-         doctl auth init -t "$token" || bootstrap
-        else
-         echo -e "${BGreen}Doctl is authenticated.${Color_Off}"
-        fi
-        token="$(jq -r '.do_key' "$AXIOM_PATH"/accounts/"$1".json)"
-        doctl auth init -t "$token" || bootstrap
-
- fi # provider do
-
-# check installed version of linode-cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
-#
-if [[ "$provider" == "linode" ]]; then
-  echo -e "${Green}Checking linode-cli version...${Color_Off}"
-
-  # Get the currently installed version of linode-cli
-  installed_version=$(linode-cli --version 2>/dev/null | grep linode-cli | cut -d ' ' -f 2 | cut -d v -f 2-)
-
-  # Compare installed version with desired version
-  if [[ "$(printf '%s\n' "$installed_version" "$LinodeCliVersion" | sort -V | head -n 1)" != "$LinodeCliVersion" ]]; then
-   echo "installed_version is lower than LinodeCliVersion in ~/.axiom/interact/includes/vars.sh"
-
-    # Check if the installed version matches the desired version
-        echo "Installing/updating linode-cli to version $LinodeCliVersion..."
-
-        # Try to install or upgrade linode-cli and handle externally-managed-environment
-        output=$(pip3 install linode-cli --upgrade 2>&1)
-
-        if echo "$output" | grep -q "externally-managed-environment"; then
-            echo "Detected an externally managed environment. Retrying with --break-system-packages..."
-            pip3 install linode-cli --upgrade --break-system-packages
-        else
-            echo "linode-cli updated successfully or no externally managed environment detected."
-        fi
-
-    if [[ $BASEOS == "Mac" ]]; then
-        echo -e "${BGreen}Installing linode packer plugin...${Color_Off}"
-        packer plugins install github.com/linode/linode
+     fi
+     if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+      sudo pacman -Syu doctl --noconfirm
+     elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+      echo "Installing/updating doctl to version $DoctlVersion..."
+      wget https://github.com/digitalocean/doctl/releases/download/v${DoctlVersion}/doctl-${DoctlVersion}-linux-amd64.tar.gz -qO- | sudo tar -xzv -C /usr/local/bin/
+      echo "doctl updated to version $DoctlVersion."
+     elif [[ $OS == "Fedora" ]]; then
+      echo "Needs Conversation"
+     fi
     fi
    fi
-    # Set up Linode CLI configuration
-    token="$(jq -r '.linode_key' "$AXIOM_PATH"/accounts/"$1".json)"
-    size="$(jq -r '.default_size' "$AXIOM_PATH"/accounts/"$1".json)"
-    region="$(jq -r '.region' "$AXIOM_PATH"/accounts/"$1".json)"
+   echo -e "${BGreen}Installing doctl packer plugin...${Color_Off}"
+   packer plugins install github.com/digitalocean/digitalocean
 
-    mkdir -p "$HOME/.config"
-    echo -e "[DEFAULT]\ndefault-user = axiom\n\n[axiom]\ntoken = $token\nregion = $region\ntype = $size\nimage = linode/alpine3.10" > "$HOME/.config/linode-cli"
+   # Validate and initialize DigitalOcean API token
+   token="$(jq -r '.do_key' "$AXIOM_PATH"/accounts/"$1".json)"
+   if ! doctl auth list &>/dev/null; then
+    echo -e "${BRed}Doctl is not authenticated.${Color_Off} Running bootstrap..."
+    doctl auth init -t "$token" || bootstrap
+   else
+    echo -e "${BGreen}Doctl is authenticated.${Color_Off}"
+   fi
+   token="$(jq -r '.do_key' "$AXIOM_PATH"/accounts/"$1".json)"
+   doctl auth init -t "$token" || bootstrap
 
-    # Validate token with Linode API
-    unauthed=$(curl -s -H "Authorization: Bearer $token" https://api.linode.com/v4/account | grep Invalid | wc -l | tr -d ' ')
+  fi # provider do
 
-    if [[ "$unauthed" == "1" ]]; then
-        echo -e "Not authenticated to linode-cli"
-        bootstrap
+  # check installed version of linode-cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
+  #
+  if [[ "$provider" == "linode" ]]; then
+   echo -e "${Green}Checking linode-cli version...${Color_Off}"
+
+   # Get the currently installed version of linode-cli
+   installed_version=$(linode-cli --version 2>/dev/null | grep linode-cli | cut -d ' ' -f 2 | cut -d v -f 2-)
+
+   # Compare installed version with desired version
+   if [[ "$(printf '%s\n' "$installed_version" "$LinodeCliVersion" | sort -V | head -n 1)" != "$LinodeCliVersion" ]]; then
+    echo "installed_version is lower than LinodeCliVersion in ~/.axiom/interact/includes/vars.sh"
+
+    # Check if the installed version matches the desired version
+    echo "Installing/updating linode-cli to version $LinodeCliVersion..."
+
+    # Try to install or upgrade linode-cli and handle externally-managed-environment
+    output=$(pip3 install linode-cli --upgrade 2>&1)
+
+    if echo "$output" | grep -q "externally-managed-environment"; then
+     echo "Detected an externally managed environment. Retrying with --break-system-packages..."
+     pip3 install linode-cli --upgrade --break-system-packages
     else
-        echo -e "${BGreen}Linode-CLI is authenticated.${Color_Off}"
+     echo "linode-cli updated successfully or no externally managed environment detected."
     fi
-fi # provider linode
 
-# check installed version of ibmcloud cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
-#
-if [[ "$provider" == "ibm" ]]; then
-   installed_version=$(ibmcloud version  2>/dev/null| cut -d ' ' -f 2 | cut -d + -f 1)
+    if [[ $BASEOS == "Mac" ]]; then
+     echo -e "${BGreen}Installing linode packer plugin...${Color_Off}"
+     packer plugins install github.com/linode/linode
+    fi
+   fi
+   # Set up Linode CLI configuration
+   token="$(jq -r '.linode_key' "$AXIOM_PATH"/accounts/"$1".json)"
+   size="$(jq -r '.default_size' "$AXIOM_PATH"/accounts/"$1".json)"
+   region="$(jq -r '.region' "$AXIOM_PATH"/accounts/"$1".json)"
+
+   mkdir -p "$HOME/.config"
+   echo -e "[DEFAULT]\ndefault-user = axiom\n\n[axiom]\ntoken = $token\nregion = $region\ntype = $size\nimage = linode/alpine3.10" >"$HOME/.config/linode-cli"
+
+   # Validate token with Linode API
+   unauthed=$(curl -s -H "Authorization: Bearer $token" https://api.linode.com/v4/account | grep Invalid | wc -l | tr -d ' ')
+
+   if [[ "$unauthed" == "1" ]]; then
+    echo -e "Not authenticated to linode-cli"
+    bootstrap
+   else
+    echo -e "${BGreen}Linode-CLI is authenticated.${Color_Off}"
+   fi
+  fi # provider linode
+
+  # check installed version of ibmcloud cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
+  #
+  if [[ "$provider" == "ibm" ]]; then
+   installed_version=$(ibmcloud version 2>/dev/null | cut -d ' ' -f 2 | cut -d + -f 1)
    if [[ "$(printf '%s\n' "$installed_version" "$IBMCloudCliVersion" | sort -V | head -n 1)" != "$IBMCloudCliVersion" ]]; then
 
     # Check if the installed version matches the required version
-        if [[ $BASEOS == "Mac" ]]; then
-            # macOS installation/update
-            echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
-            curl -fsSL https://clis.cloud.ibm.com/install/osx | sh
-            echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
-            ibmcloud plugin install sl -q -f
-        elif [[ $BASEOS == "Linux" ]]; then
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
-            fi
-            if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
-                echo "Needs Conversation for Arch or ManjaroLinux"
-            elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
-                if ! [ -x "$(command -v ibmcloud)" ]; then
-                    echo -e "${BGreen}Installing ibmcloud-cli on Linux...${Color_Off}"
-                    curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
-                fi
-                echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
-                ibmcloud plugin install sl -q -f
-            elif [[ $OS == "Fedora" ]]; then
-                echo "Needs Conversation for Fedora"
-            fi
-        fi
+    if [[ $BASEOS == "Mac" ]]; then
+     # macOS installation/update
+     echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
+     curl -fsSL https://clis.cloud.ibm.com/install/osx | sh
+     echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
+     ibmcloud plugin install sl -q -f
+    elif [[ $BASEOS == "Linux" ]]; then
+     if uname -a | grep -qi "Microsoft"; then
+      OS="UbuntuWSL"
+     else
+      OS=$(lsb_release -i | awk '{ print $3 }')
+      if ! command -v lsb_release &>/dev/null; then
+       OS="unknown-Linux"
+       BASEOS="Linux"
+      fi
+     fi
+     if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+      echo "Needs Conversation for Arch or ManjaroLinux"
+     elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+      if ! [ -x "$(command -v ibmcloud)" ]; then
+       echo -e "${BGreen}Installing ibmcloud-cli on Linux...${Color_Off}"
+       curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+      fi
+      echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
+      ibmcloud plugin install sl -q -f
+     elif [[ $OS == "Fedora" ]]; then
+      echo "Needs Conversation for Fedora"
+     fi
+    fi
 
-        echo "ibmcloud-cli updated to version $IBMCloudCliVersion."
+    echo "ibmcloud-cli updated to version $IBMCloudCliVersion."
    fi
-    # Change Packer version for IBM Cloud
-    mkdir -p /tmp/packer-ibm/
-    if [[ ! -f /tmp/packer-ibm/packer ]]; then
-        if [[ $BASEOS == "Linux" ]]; then
-            wget -q -O /tmp/packer.zip https://releases.hashicorp.com/packer/1.5.6/packer_1.5.6_linux_amd64.zip && cd /tmp/ && unzip packer.zip && mv packer /tmp/packer-ibm/ && rm /tmp/packer.zip
-        elif [[ $BASEOS == "Mac" ]]; then
-            wget -q -O /tmp/packer.zip https://releases.hashicorp.com/packer/1.5.6/packer_1.5.6_darwin_amd64.zip && cd /tmp/ && unzip packer.zip && mv packer /tmp/packer-ibm/ && rm /tmp/packer.zip
-        fi
+   # Change Packer version for IBM Cloud
+   mkdir -p /tmp/packer-ibm/
+   if [[ ! -f /tmp/packer-ibm/packer ]]; then
+    if [[ $BASEOS == "Linux" ]]; then
+     wget -q -O /tmp/packer.zip https://releases.hashicorp.com/packer/1.5.6/packer_1.5.6_linux_amd64.zip && cd /tmp/ && unzip packer.zip && mv packer /tmp/packer-ibm/ && rm /tmp/packer.zip
+    elif [[ $BASEOS == "Mac" ]]; then
+     wget -q -O /tmp/packer.zip https://releases.hashicorp.com/packer/1.5.6/packer_1.5.6_darwin_amd64.zip && cd /tmp/ && unzip packer.zip && mv packer /tmp/packer-ibm/ && rm /tmp/packer.zip
     fi
+   fi
 
-    # Packer check for IBM Cloud plugin
-    if [[ ! -f "$HOME/.packer.d/plugins/packer-builder-ibmcloud" ]]; then
-        echo -n -e "${BGreen}Installing IBM Cloud Packer Builder (https://github.com/IBM/packer-plugin-ibmcloud/):\n y/n >> ${Color_Off}"
-        os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-        mkdir -p ~/.packer.d/plugins/
-        wget https://github.com/IBM/packer-plugin-ibmcloud/releases/download/v1.0.1/packer-builder-ibmcloud_1.0.1_linux_64-bit.tar.gz -O - | tar -xz -C ~/.packer.d/plugins/
-    fi
+   # Packer check for IBM Cloud plugin
+   if [[ ! -f "$HOME/.packer.d/plugins/packer-builder-ibmcloud" ]]; then
+    echo -n -e "${BGreen}Installing IBM Cloud Packer Builder (https://github.com/IBM/packer-plugin-ibmcloud/):\n y/n >> ${Color_Off}"
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    mkdir -p ~/.packer.d/plugins/
+    wget https://github.com/IBM/packer-plugin-ibmcloud/releases/download/v1.0.1/packer-builder-ibmcloud_1.0.1_linux_64-bit.tar.gz -O - | tar -xz -C ~/.packer.d/plugins/
+   fi
 
-    # Validate Token
-    token="$(jq -r '.ibm_cloud_api_key' "$AXIOM_PATH"/accounts/"$1".json)"
-    ibmcloud login --apikey "$token" --no-region || bootstrap
-fi # provider ibm
+   # Validate Token
+   token="$(jq -r '.ibm_cloud_api_key' "$AXIOM_PATH"/accounts/"$1".json)"
+   ibmcloud login --apikey "$token" --no-region || bootstrap
+  fi # provider ibm
 
-# check installed version of azure cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
-#
-if [[ "$provider" == "azure" ]]; then
+  # check installed version of azure cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
+  #
+  if [[ "$provider" == "azure" ]]; then
    # Set the required Azure CLI version
-   installed_version=$(az version  2>/dev/null| jq -r '."azure-cli"')
+   installed_version=$(az version 2>/dev/null | jq -r '."azure-cli"')
    if [[ "$(printf '%s\n' "$installed_version" "$AzureCliVersion" | sort -V | head -n 1)" != "$AzureCliVersion" ]]; then
 
-        # Handle macOS installation/update
-        if [[ $BASEOS == "Mac" ]]; then
-            whereis brew
-            if [ ! $? -eq 0 ] || [[ ! -z ${AXIOM_FORCEBREW+x} ]]; then
-                echo -e "${BGreen}Installing Homebrew...${Color_Off}"
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            else
-                echo -e "${BGreen}Checking for Homebrew... already installed.${Color_Off}"
-            fi
-            if ! [ -x "$(command -v az)" ]; then
-                echo -e "${BGreen}Installing Azure CLI (az)...${Color_Off}"
-                brew update && brew install azure-cli
-            else
-                echo -e "${BGreen}Updating Azure CLI (az)...${Color_Off}"
-                brew update && brew upgrade azure-cli
-            fi
+    # Handle macOS installation/update
+    if [[ $BASEOS == "Mac" ]]; then
+     whereis brew
+     if [ ! $? -eq 0 ] || [[ ! -z ${AXIOM_FORCEBREW+x} ]]; then
+      echo -e "${BGreen}Installing Homebrew...${Color_Off}"
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+     else
+      echo -e "${BGreen}Checking for Homebrew... already installed.${Color_Off}"
+     fi
+     if ! [ -x "$(command -v az)" ]; then
+      echo -e "${BGreen}Installing Azure CLI (az)...${Color_Off}"
+      brew update && brew install azure-cli
+     else
+      echo -e "${BGreen}Updating Azure CLI (az)...${Color_Off}"
+      brew update && brew upgrade azure-cli
+     fi
 
-        # Handle Linux installation/update
-        elif [[ $BASEOS == "Linux" ]]; then
-            sudo apt-get update -qq
-            sudo apt-get install ca-certificates curl apt-transport-https lsb-release gnupg -y -qq
+    # Handle Linux installation/update
+    elif [[ $BASEOS == "Linux" ]]; then
+     sudo apt-get update -qq
+     sudo apt-get install ca-certificates curl apt-transport-https lsb-release gnupg -y -qq
 
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
-            fi
+     if uname -a | grep -qi "Microsoft"; then
+      OS="UbuntuWSL"
+     else
+      OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
+      if ! command -v lsb_release &>/dev/null; then
+       OS="unknown-Linux"
+       BASEOS="Linux"
+      fi
+     fi
 
-            AZ_REPO=$(lsb_release -cs)
-            if [[ $AZ_REPO == "kali-rolling" ]]; then
-                check_version=$(cat /proc/version | awk '{ print $6 $7 }' | tr -d '()' | cut -d . -f 1)
-                case $check_version in
-                    Debian10)
-                        AZ_REPO="buster"
-                        ;;
-                    Debian11)
-                        AZ_REPO="bullseye"
-                        ;;
-                    Debian12)
-                        AZ_REPO="bookworm"
-                        ;;
-                    *)
-                        echo "Unknown Debian version. Exiting."
-                        exit 1
-                        ;;
-                esac
-            fi
-            curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
-            echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
+     AZ_REPO=$(lsb_release -cs)
+     if [[ $AZ_REPO == "kali-rolling" ]]; then
+      check_version=$(cat /proc/version | awk '{ print $6 $7 }' | tr -d '()' | cut -d . -f 1)
+      case $check_version in
+      Debian10)
+       AZ_REPO="buster"
+       ;;
+      Debian11)
+       AZ_REPO="bullseye"
+       ;;
+      Debian12)
+       AZ_REPO="bookworm"
+       ;;
+      *)
+       echo "Unknown Debian version. Exiting."
+       exit 1
+       ;;
+      esac
+     fi
+     curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg >/dev/null
+     echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
 
-            sudo apt-get update -qq
-            sudo apt-get purge azure-cli -y -qq
-            sudo apt-get install azure-cli -y -qq
-         
-        elif [[ $OS == "Fedora" ]]; then
-            echo "Needs Conversation for Fedora"
-        fi
-  fi 
- # Authenticate using client credentials stored in axiom.json
-    client_id="$(jq -r '.client_id' "$AXIOM_PATH"/axiom.json)"
-    client_secret="$(jq -r '.client_secret' "$AXIOM_PATH"/axiom.json)"
-    tenant_id="$(jq -r '.tenant_id' "$AXIOM_PATH"/axiom.json)"
-    subscription_id="$(jq -r '.subscription_id' "$AXIOM_PATH"/axiom.json)"
-    use_azure_cli_auth="$(jq -r '.use_azure_cli_auth' "$AXIOM_PATH"/axiom.json)"
+     sudo apt-get update -qq
+     sudo apt-get purge azure-cli -y -qq
+     sudo apt-get install azure-cli -y -qq
 
-    if [[ "$use_azure_cli_auth" == "true" ]]; then
-        echo -e "${BGreen}Authenticating with Azure using Azure CLI...${Color_Off}"
-
-        az login --service-principal --username "$client_id" --password "$client_secret" --tenant "$tenant_id" || bootstrap
-        az account set --subscription "$subscription_id"
-        sleep 3
-        # Check if the correct subscription is set and accessible
-        az account show &> /dev/null
-        if [[ $? -ne 0 ]]; then
-            echo -e "${BRed}Not authenticated to Azure CLI. Running bootstrap...${Color_Off}"
-            bootstrap
-        else
-            echo -e "${BGreen}Azure CLI is authenticated.${Color_Off}"
-        fi
-    else
-        echo -e "${BRed}Azure CLI authentication disabled in axiom.json${Color_Off}"
-        bootstrap
+    elif [[ $OS == "Fedora" ]]; then
+     echo "Needs Conversation for Fedora"
     fi
-fi # provider azure
+   fi
+   # Authenticate using client credentials stored in axiom.json
+   client_id="$(jq -r '.client_id' "$AXIOM_PATH"/axiom.json)"
+   client_secret="$(jq -r '.client_secret' "$AXIOM_PATH"/axiom.json)"
+   tenant_id="$(jq -r '.tenant_id' "$AXIOM_PATH"/axiom.json)"
+   subscription_id="$(jq -r '.subscription_id' "$AXIOM_PATH"/axiom.json)"
+   use_azure_cli_auth="$(jq -r '.use_azure_cli_auth' "$AXIOM_PATH"/axiom.json)"
 
-# check installed version of aws cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
-#
-if [[ "$provider" == "aws" ]]; then
-   installed_version=$(aws --version  2>/dev/null | cut -d ' ' -f 1 | cut -d '/' -f 2)
+   if [[ "$use_azure_cli_auth" == "true" ]]; then
+    echo -e "${BGreen}Authenticating with Azure using Azure CLI...${Color_Off}"
+
+    az login --service-principal --username "$client_id" --password "$client_secret" --tenant "$tenant_id" || bootstrap
+    az account set --subscription "$subscription_id"
+    sleep 3
+    # Check if the correct subscription is set and accessible
+    az account show &>/dev/null
+    if [[ $? -ne 0 ]]; then
+     echo -e "${BRed}Not authenticated to Azure CLI. Running bootstrap...${Color_Off}"
+     bootstrap
+    else
+     echo -e "${BGreen}Azure CLI is authenticated.${Color_Off}"
+    fi
+   else
+    echo -e "${BRed}Azure CLI authentication disabled in axiom.json${Color_Off}"
+    bootstrap
+   fi
+  fi # provider azure
+
+  # check installed version of aws cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
+  #
+  if [[ "$provider" == "aws" ]]; then
+   installed_version=$(aws --version 2>/dev/null | cut -d ' ' -f 1 | cut -d '/' -f 2)
    if [[ "$(printf '%s\n' "$installed_version" "$AWSCliVersion" | sort -V | head -n 1)" != "$AWSCliVersion" ]]; then
-        # Determine the OS type and handle installation accordingly
-        if [[ $BASEOS == "Mac" ]]; then
-            echo -e "${BGreen}Installing/Updating AWS CLI on macOS...${Color_Off}"
-            curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
-            sudo installer -pkg AWSCLIV2.pkg -target /
-            rm AWSCLIV2.pkg
+    # Determine the OS type and handle installation accordingly
+    if [[ $BASEOS == "Mac" ]]; then
+     echo -e "${BGreen}Installing/Updating AWS CLI on macOS...${Color_Off}"
+     curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+     sudo installer -pkg AWSCLIV2.pkg -target /
+     rm AWSCLIV2.pkg
 
-        elif [[ $BASEOS == "Linux" ]]; then
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
-            fi
+    elif [[ $BASEOS == "Linux" ]]; then
+     if uname -a | grep -qi "Microsoft"; then
+      OS="UbuntuWSL"
+     else
+      OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
+      if ! command -v lsb_release &>/dev/null; then
+       OS="unknown-Linux"
+       BASEOS="Linux"
+      fi
+     fi
 
-            # Install AWS CLI based on specific Linux distribution
-            if [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
-                echo -e "${BGreen}Installing/Updating AWS CLI on $OS...${Color_Off}"
-                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
-                cd /tmp
-                unzip awscliv2.zip
-                sudo ./aws/install
-                rm -rf /tmp/aws
-                rm /tmp/awscliv2.zip
-            elif [[ $OS == "Fedora" ]]; then
-                echo -e "${BGreen}Installing/Updating AWS CLI on Fedora...${Color_Off}"
-                sudo dnf install -y unzip
-                curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
-                cd /tmp
-                unzip awscliv2.zip
-                sudo ./aws/install
-                rm -rf /tmp/aws
-                rm /tmp/awscliv2.zip
-            else
-                echo -e "${BRed}Unsupported Linux distribution: $OS${Color_Off}"
-            fi
-        fi
+     # Install AWS CLI based on specific Linux distribution
+     if [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+      echo -e "${BGreen}Installing/Updating AWS CLI on $OS...${Color_Off}"
+      curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+      cd /tmp
+      unzip awscliv2.zip
+      sudo ./aws/install
+      rm -rf /tmp/aws
+      rm /tmp/awscliv2.zip
+     elif [[ $OS == "Fedora" ]]; then
+      echo -e "${BGreen}Installing/Updating AWS CLI on Fedora...${Color_Off}"
+      sudo dnf install -y unzip
+      curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+      cd /tmp
+      unzip awscliv2.zip
+      sudo ./aws/install
+      rm -rf /tmp/aws
+      rm /tmp/awscliv2.zip
+     else
+      echo -e "${BRed}Unsupported Linux distribution: $OS${Color_Off}"
+     fi
+    fi
 
    fi
-    # Check if AWS CLI is authenticated
-    if ! aws sts get-caller-identity &> /dev/null; then
-        echo -e "${BRed}AWS CLI is not authenticated.${Color_Off} Running bootstrap..."
-        bootstrap
-    else
-        echo -e "${BGreen}AWS CLI is authenticated.${Color_Off}"
-    fi
+   # Check if AWS CLI is authenticated
+   if ! aws sts get-caller-identity &>/dev/null; then
+    echo -e "${BRed}AWS CLI is not authenticated.${Color_Off} Running bootstrap..."
+    bootstrap
+   else
+    echo -e "${BGreen}AWS CLI is authenticated.${Color_Off}"
+   fi
 
-    # Use credentials from axiom.json if available
-    aws_access_key="$(jq -r '.aws_access_key' "$AXIOM_PATH"/axiom.json)"
-    aws_secret_access_key="$(jq -r '.aws_secret_access_key' "$AXIOM_PATH"/axiom.json)"
-    aws_region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
+   # Use credentials from axiom.json if available
+   aws_access_key="$(jq -r '.aws_access_key' "$AXIOM_PATH"/axiom.json)"
+   aws_secret_access_key="$(jq -r '.aws_secret_access_key' "$AXIOM_PATH"/axiom.json)"
+   aws_region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
 
-    if [[ -n "$aws_access_key" && -n "$aws_secret_access_key" ]]; then
-        echo -e "${BGreen}Configuring AWS CLI with credentials from axiom.json...${Color_Off}"
-        aws configure set aws_access_key "$aws_access_key"
-        aws configure set aws_secret_access_key "$aws_secret_access_key"
-        aws configure set region "$aws_region"
-    else
-        echo -e "${BRed}No AWS credentials found in axiom.json. Please set them manually.${Color_Off}"
-        bootstrap
-    fi
-fi # provider aws
+   if [[ -n "$aws_access_key" && -n "$aws_secret_access_key" ]]; then
+    echo -e "${BGreen}Configuring AWS CLI with credentials from axiom.json...${Color_Off}"
+    aws configure set aws_access_key "$aws_access_key"
+    aws configure set aws_secret_access_key "$aws_secret_access_key"
+    aws configure set region "$aws_region"
+   else
+    echo -e "${BRed}No AWS credentials found in axiom.json. Please set them manually.${Color_Off}"
+    bootstrap
+   fi
+  fi # provider aws
 
-# Install hetzner if not already installed, check token is valid or kick off bootstrap
-#
-if [[ "$provider" == "hetzner" ]]; then
-   installed_version=$(hcloud version 2>/dev/null| cut -d ' ' -f 2)
+  # Install hetzner if not already installed, check token is valid or kick off bootstrap
+  #
+  if [[ "$provider" == "hetzner" ]]; then
+   installed_version=$(hcloud version 2>/dev/null | cut -d ' ' -f 2)
    if [[ "$(printf '%s\n' "$installed_version" "$HetznerCliVersion" | sort -V | head -n 1)" != "$HetznerCliVersion" ]]; then
-        # Handle macOS installation/update
-        if [[ $BASEOS == "Mac" ]]; then
-            whereis brew
-            if [ ! $? -eq 0 ] || [[ ! -z ${AXIOM_FORCEBREW+x} ]]; then
-                echo -e "${BGreen}Installing Homebrew...${Color_Off}"
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            else
-                echo -e "${BGreen}Checking for Homebrew... already installed.${Color_Off}"
-            fi
-                echo -e "${BGreen}Installing hetzner-cloud CLI (hcloud)...${Color_Off}"
-                brew install hcloud
-                echo -e "${BGreen}Installing Hetzner Packer plugin...${Color_Off}"
-                packer plugins install github.com/hetznercloud/hcloud
+    # Handle macOS installation/update
+    if [[ $BASEOS == "Mac" ]]; then
+     whereis brew
+     if [ ! $? -eq 0 ] || [[ ! -z ${AXIOM_FORCEBREW+x} ]]; then
+      echo -e "${BGreen}Installing Homebrew...${Color_Off}"
+      /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+     else
+      echo -e "${BGreen}Checking for Homebrew... already installed.${Color_Off}"
+     fi
+     echo -e "${BGreen}Installing hetzner-cloud CLI (hcloud)...${Color_Off}"
+     brew install hcloud
+     echo -e "${BGreen}Installing Hetzner Packer plugin...${Color_Off}"
+     packer plugins install github.com/hetznercloud/hcloud
 
-        # Handle Linux installation/update
-        elif [[ $BASEOS == "Linux" ]]; then
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
-            fi
+    # Handle Linux installation/update
+    elif [[ $BASEOS == "Linux" ]]; then
+     if uname -a | grep -qi "Microsoft"; then
+      OS="UbuntuWSL"
+     else
+      OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
+      if ! command -v lsb_release &>/dev/null; then
+       OS="unknown-Linux"
+       BASEOS="Linux"
+      fi
+     fi
 
-            # Install or update hcloud on different Linux distributions
-            if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
-                sudo pacman -Syu hcloud --noconfirm
-            elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
-                    echo -e "${BGreen}Installing hetzner-cloud CLI (hcloud)...${Color_Off}"
-                    wget -q -O /tmp/hetzner-cli.tar.gz https://github.com/hetznercloud/cli/releases/download/v${HetznerCliVersion}/hcloud-linux-amd64.tar.gz && tar -xvzf /tmp/hetzner-cli.tar.gz -C /tmp && sudo mv /tmp/hcloud /usr/bin/hcloud && rm /tmp/hetzner-cli.tar.gz
-            elif [[ $OS == "Fedora" ]]; then
-                echo "Needs Conversation for Fedora"
-            fi
-        fi
-
+     # Install or update hcloud on different Linux distributions
+     if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+      sudo pacman -Syu hcloud --noconfirm
+     elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+      echo -e "${BGreen}Installing hetzner-cloud CLI (hcloud)...${Color_Off}"
+      wget -q -O /tmp/hetzner-cli.tar.gz https://github.com/hetznercloud/cli/releases/download/v${HetznerCliVersion}/hcloud-linux-amd64.tar.gz && tar -xvzf /tmp/hetzner-cli.tar.gz -C /tmp && sudo mv /tmp/hcloud /usr/bin/hcloud && rm /tmp/hetzner-cli.tar.gz
+     elif [[ $OS == "Fedora" ]]; then
+      echo "Needs Conversation for Fedora"
+     fi
     fi
-    # Validate token and setup configuration
-    token="$(jq -r '.hetzner_key' "$AXIOM_PATH"/accounts/"$1".json)"
-    status_code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $token" https://api.hetzner.cloud/v1/servers)
-    echo -e "${BGreen}Configuring Hetzner CLI with credentials from axiom.json...${Color_Off}"
 
-    if [[ "$status_code" == "200" ]]; then
-        mkdir -p "$HOME/.config/hcloud"
+   fi
+   # Validate token and setup configuration
+   token="$(jq -r '.hetzner_key' "$AXIOM_PATH"/accounts/"$1".json)"
+   status_code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $token" https://api.hetzner.cloud/v1/servers)
+   echo -e "${BGreen}Configuring Hetzner CLI with credentials from axiom.json...${Color_Off}"
 
-        cat <<EOT > "$HOME/.config/hcloud/cli.toml"
+   if [[ "$status_code" == "200" ]]; then
+    mkdir -p "$HOME/.config/hcloud"
+
+    cat <<EOT >"$HOME/.config/hcloud/cli.toml"
 active_context = "$1"
 
 [[contexts]]
 name = "$1"
 token = "$token"
 EOT
-    else
-        echo -e "Not authenticated to hetzner-cloud CLI (hcloud)"
-        bootstrap
-    fi
-fi
+   else
+    echo -e "Not authenticated to hetzner-cloud CLI (hcloud)"
+    bootstrap
+   fi
+  fi
 
-echo -e "${Green}Selected $1 successfully${Color_Off}"
+  echo -e "${Green}Selected $1 successfully${Color_Off}"
+ else
+  echo -e "${Red}Account name not present${Color_Off}"
+ fi
 else
-        echo -e "${Red}Account name not present${Color_Off}"
-    fi
-else
-    echo -e "${BWhite}Available Accounts${Color_Off}"
-    echo -n -e "${BGreen}"
-    for account in $accounts
-        do
-            if [[ $account == $current ]]
-            then
-                echo "* $account"
-            else
-                echo "  $account"
-            fi
-        done
-    echo -n -e "${Color_Off}"
+ echo -e "${BWhite}Available Accounts${Color_Off}"
+ echo -n -e "${BGreen}"
+ for account in $accounts; do
+  if [[ $account == $current ]]; then
+   echo "* $account"
+  else
+   echo "  $account"
+  fi
+ done
+ echo -n -e "${Color_Off}"
 fi

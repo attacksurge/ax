@@ -12,97 +12,97 @@ start="$(pwd)"
 BASEOS="$(uname)"
 account_path=$(ls -la $AXIOM_PATH/axiom.json | rev | cut -d " " -f 1 | rev)
 accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
-current=$(ls -lh ~/.axiom/axiom.json | awk '{ print $11 }' | tr '/' '\n' | grep json | sed 's/\.json//g') > /dev/null 2>&1
+current=$(ls -lh ~/.axiom/axiom.json | awk '{ print $11 }' | tr '/' '\n' | grep json | sed 's/\.json//g') >/dev/null 2>&1
 provider="$(jq -r ".provider" "$AXIOM_PATH/axiom.json")"
 
 ###################################################################
 #  Validate size for ibm only
 #
 validate_size() {
-  local input_size="$1"
+ local input_size="$1"
 
-  # Extract valid RAM and CPU values from sizes_list
-  local valid_ram=$(sizes_list | grep '^RAM:' | sed 's/RAM: //; s/, /\n/g')
-  local valid_cpu=$(sizes_list | grep '^CPU:' | sed 's/CPU: //; s/, /\n/g')
+ # Extract valid RAM and CPU values from sizes_list
+ local valid_ram=$(sizes_list | grep '^RAM:' | sed 's/RAM: //; s/, /\n/g')
+ local valid_cpu=$(sizes_list | grep '^CPU:' | sed 's/CPU: //; s/, /\n/g')
 
-  # Extract RAM and CPU from input size
-  local part1
-  local part2
+ # Extract RAM and CPU from input size
+ local part1
+ local part2
 
-  # Split input_size into two parts
-  IFS=',' read -r part1 part2 <<< "$input_size"
+ # Split input_size into two parts
+ IFS=',' read -r part1 part2 <<<"$input_size"
 
-  # Check if each part is a valid RAM or CPU
-  if [[ "$valid_ram" =~ (^|[[:space:]])"$part1"($|[[:space:]]) ]] && [[ "$valid_cpu" =~ (^|[[:space:]])"$part2"($|[[:space:]]) ]]; then
-    ram="$part1"
-    cpu="$part2"
-  elif [[ "$valid_ram" =~ (^|[[:space:]])"$part2"($|[[:space:]]) ]] && [[ "$valid_cpu" =~ (^|[[:space:]])"$part1"($|[[:space:]]) ]]; then
-    ram="$part2"
-    cpu="$part1"
-  else
-    echo -e "${Red}Failed to find instance size with RAM: $ram and CPU: $cpu... exiting${Color_Off}" 
-    echo -e "${Red}To print all available intance sizes, run ax sizes ls${Color_Off}"
-    exit 1
-    return 1
-  fi
-  return 0
+ # Check if each part is a valid RAM or CPU
+ if [[ "$valid_ram" =~ (^|[[:space:]])"$part1"($|[[:space:]]) ]] && [[ "$valid_cpu" =~ (^|[[:space:]])"$part2"($|[[:space:]]) ]]; then
+  ram="$part1"
+  cpu="$part2"
+ elif [[ "$valid_ram" =~ (^|[[:space:]])"$part2"($|[[:space:]]) ]] && [[ "$valid_cpu" =~ (^|[[:space:]])"$part1"($|[[:space:]]) ]]; then
+  ram="$part2"
+  cpu="$part1"
+ else
+  echo -e "${Red}Failed to find instance size with RAM: $ram and CPU: $cpu... exiting${Color_Off}"
+  echo -e "${Red}To print all available intance sizes, run ax sizes ls${Color_Off}"
+  exit 1
+  return 1
+ fi
+ return 0
 }
 
 ###################################################################
 #  Get default instance size if ax sizes default is used
 #
 get_default_size() {
-  if [[ "$provider" == "azure" ]]; then
-    default_size="Standard_B1ls"
+ if [[ "$provider" == "azure" ]]; then
+  default_size="Standard_B1ls"
 
-  elif [[ "$provider" == "aws" ]]; then
-    default_size="t2.medium"
+ elif [[ "$provider" == "aws" ]]; then
+  default_size="t2.medium"
 
-  elif [[ "$provider" == "do" ]]; then
-    default_size="s-1vcpu-1gb"
+ elif [[ "$provider" == "do" ]]; then
+  default_size="s-1vcpu-1gb"
 
-  elif [[ "$provider" == "ibm" ]]; then
-    default_size="2048,2"
+ elif [[ "$provider" == "ibm" ]]; then
+  default_size="2048,2"
 
-  elif [[ "$provider" == "linode" ]]; then
-    default_size="g6-standard-1"
+ elif [[ "$provider" == "linode" ]]; then
+  default_size="g6-standard-1"
 
-  elif [[ "$provider" == "hetzner" ]]; then
-    default_size="cx22"
+ elif [[ "$provider" == "hetzner" ]]; then
+  default_size="cx22"
 
-  else
-    echo "Error: Unknown provider '$provider'"
-    exit 1
-  fi
+ else
+  echo "Error: Unknown provider '$provider'"
+  exit 1
+ fi
 }
 
 ###########################################################################################################
 # Help Menu:
 #
 function usage() {
-        echo -e "${BWhite}Description:${Color_Off}"
-        echo -e "  Manage the default instance size used by '${BGreen}axiom-init${Color_Off}' or '${BGreen}axiom-fleet${Color_Off}' with '${BGreen}axiom-sizes${Color_Off}'!"
-        echo -e "  List all sizes the cloud provider has with '${BGreen}axiom-sizes ls${Color_Off}' and select a new one with '${BGreen}axiom-sizes select \$new_size${Color_Off}' "
-        echo -e "  All this does is replaces the .default_size in ~/.axiom/axiom.json with a new size"
-        echo -e "${BWhite}Examples:"
-        echo -e "  ${Green}axiom-sizes ls${Color_Off} # List all sizes the cloud provider offers"
-        echo -e "  ${Green}axiom-sizes select Standard_F2${Color_Off} # Set a new default instance size to use with future ${Color_Off}'${BGreen}axiom-init/axiom-fleet${Color_Off}'"
-        echo -e "  ${Green}axiom-sizes select 2,8192${Color_Off} # For ibm cloud, supply comma separated ram,cpu or cpu,ram values"
-        echo -e "  ${Green}axiom-sizes default${Color_Off} # Restore instance size to the default"
-        echo -e "${BWhite}Usage:${Color_Off}"
-        echo -e "  ls (optional)"
-        echo -e "    List all available instance sizes '${BGreen}axiom-images ls${Color_Off}'"
-        echo -e "  get (optional)"
-        echo -e "    Print information about currently used instance size, equivalent to (cat ~/.axiom/axiom.json) '${BGreen}axiom-sizes get${Color_Off}'"
-        echo -e "  select <required insntance size name>"
-        echo -e "    Select a new instance size to use for future ${Color_Off}'${BGreen}axiom-init/axiom-fleet${Color_Off}', replaces 'default_size' in ~/.axiom/axiom.json with new 'default_size' (must be valid instance size from '${BGreen}ax sizes ls${Color_Off}')"
-        echo -e "  default (optional)"
-        echo -e "    Restore the default instance size '${BGreen}axiom-sizes default${Color_Off}'"
-        echo -e "  --debug (optional)"
-        echo -e "    Enable debug mode (VERY VERBOSE!)"
-        echo -e "  --help (optional)"
-        echo -e "    Display this help menu"
-exit
+ echo -e "${BWhite}Description:${Color_Off}"
+ echo -e "  Manage the default instance size used by '${BGreen}axiom-init${Color_Off}' or '${BGreen}axiom-fleet${Color_Off}' with '${BGreen}axiom-sizes${Color_Off}'!"
+ echo -e "  List all sizes the cloud provider has with '${BGreen}axiom-sizes ls${Color_Off}' and select a new one with '${BGreen}axiom-sizes select \$new_size${Color_Off}' "
+ echo -e "  All this does is replaces the .default_size in ~/.axiom/axiom.json with a new size"
+ echo -e "${BWhite}Examples:"
+ echo -e "  ${Green}axiom-sizes ls${Color_Off} # List all sizes the cloud provider offers"
+ echo -e "  ${Green}axiom-sizes select Standard_F2${Color_Off} # Set a new default instance size to use with future ${Color_Off}'${BGreen}axiom-init/axiom-fleet${Color_Off}'"
+ echo -e "  ${Green}axiom-sizes select 2,8192${Color_Off} # For ibm cloud, supply comma separated ram,cpu or cpu,ram values"
+ echo -e "  ${Green}axiom-sizes default${Color_Off} # Restore instance size to the default"
+ echo -e "${BWhite}Usage:${Color_Off}"
+ echo -e "  ls (optional)"
+ echo -e "    List all available instance sizes '${BGreen}axiom-images ls${Color_Off}'"
+ echo -e "  get (optional)"
+ echo -e "    Print information about currently used instance size, equivalent to (cat ~/.axiom/axiom.json) '${BGreen}axiom-sizes get${Color_Off}'"
+ echo -e "  select <required insntance size name>"
+ echo -e "    Select a new instance size to use for future ${Color_Off}'${BGreen}axiom-init/axiom-fleet${Color_Off}', replaces 'default_size' in ~/.axiom/axiom.json with new 'default_size' (must be valid instance size from '${BGreen}ax sizes ls${Color_Off}')"
+ echo -e "  default (optional)"
+ echo -e "    Restore the default instance size '${BGreen}axiom-sizes default${Color_Off}'"
+ echo -e "  --debug (optional)"
+ echo -e "    Enable debug mode (VERY VERBOSE!)"
+ echo -e "  --help (optional)"
+ echo -e "    Display this help menu"
+ exit
 }
 
 ###########################################################################################################
@@ -117,54 +117,53 @@ default_size="false"
 #  Parse command line arguments
 #
 if [[ "$@" == "--help" ]] || [[ "$@" == "-h" ]] || [[ "$@" == "" ]]; then
-usage
-exit
+ usage
+ exit
 fi
 i=0
-for arg in "$@"
-do
-    i=$((i+1))
-    if [[  ! " ${pass[@]} " =~ " ${i} " ]]; then
-        set=false
-       if [[ "$arg" == "--debug" ]]; then
-            set -xv
-            set=true
-            pass+=($i)
-        fi
-        if [[ "$arg" == "default" ]]; then
-            restore_default_size=true
-            set=true
-            pass+=($i)
-        fi
-        if [[ "$arg" == "select" ]] ||[[ "$arg" == "set" ]] || [[ "$arg" == "use" ]] ; then
-            n=$((i+1))
-            use=true
-            new_size=$(echo ${!n})
-            set=true
-            pass+=($i)
-            pass+=($n)
-        fi
-        if [[ "$arg" == "ls" ]] || [[ "$arg" == "list" ]]; then
-            list="true"
-            set=true
-            pass+=($i)
-        fi
-        if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] || [[ "$arg" == "help" ]]; then
-            usage
-            exit
-            set=true
-            pass+=($i)
-        fi
-        if [[ "$arg" == "get" ]] ; then
-            get="true"
-            set=true
-            pass+=($i)
-        fi
-        if  [[ "$set" != "true" ]]; then
-            args="$args $arg"
-        fi
+for arg in "$@"; do
+ i=$((i + 1))
+ if [[ ! " ${pass[@]} " =~ " ${i} " ]]; then
+  set=false
+  if [[ "$arg" == "--debug" ]]; then
+   set -xv
+   set=true
+   pass+=($i)
+  fi
+  if [[ "$arg" == "default" ]]; then
+   restore_default_size=true
+   set=true
+   pass+=($i)
+  fi
+  if [[ "$arg" == "select" ]] || [[ "$arg" == "set" ]] || [[ "$arg" == "use" ]]; then
+   n=$((i + 1))
+   use=true
+   new_size=$(echo ${!n})
+   set=true
+   pass+=($i)
+   pass+=($n)
+  fi
+  if [[ "$arg" == "ls" ]] || [[ "$arg" == "list" ]]; then
+   list="true"
+   set=true
+   pass+=($i)
+  fi
+  if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] || [[ "$arg" == "help" ]]; then
+   usage
+   exit
+   set=true
+   pass+=($i)
+  fi
+  if [[ "$arg" == "get" ]]; then
+   get="true"
+   set=true
+   pass+=($i)
+  fi
+  if [[ "$set" != "true" ]]; then
+   args="$args $arg"
+  fi
 
-    fi
+ fi
 done
 
 # Get the default size in /.axiom/accout/account.json
@@ -188,29 +187,39 @@ elif [[ "$use" == "true" ]]; then
   if [[ "$new_size" =~ ',' ]]; then
    old="$(cat "$AXIOM_PATH/axiom.json" | jq -r '. | "\(.default_size) \(.cpu)"')"
    input_size="$new_size"
-    if validate_size "$input_size"; then
-     jq '.default_size="'$ram'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
-     jq '.cpu="'$cpu'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
-     echo -e "${Green}Successfully updated ~/.axiom/axiom.json to use ram: $ram and cpu: $cpu in account: $current${Color_Off}"
-     echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
-    else
-     exit 1
-    fi
+   if validate_size "$input_size"; then
+    jq '.default_size="'$ram'"' <"$account_path" >"$AXIOM_PATH"/tmp.json
+    mv "$AXIOM_PATH"/tmp.json "$account_path"
+    jq '.cpu="'$cpu'"' <"$account_path" >"$AXIOM_PATH"/tmp.json
+    mv "$AXIOM_PATH"/tmp.json "$account_path"
+    echo -e "${Green}Successfully updated ~/.axiom/axiom.json to use ram: $ram and cpu: $cpu in account: $current${Color_Off}"
+    echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
+   else
+    exit 1
+   fi
   else
    old="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.default_size')"
-   sizes_list |grep RAM | grep -w $new_size || { echo -e "${Red}Failed to find instance RAM size: "$new_size"... exiting${Color_Off}" ; \
-    echo -e "${Red}To print all available intance sizes, run ax sizes ls${Color_Off}" ; exit 1; }
-   jq '.default_size="'$new_size'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+   sizes_list | grep RAM | grep -w $new_size || {
+    echo -e "${Red}Failed to find instance RAM size: "$new_size"... exiting${Color_Off}"
+    echo -e "${Red}To print all available intance sizes, run ax sizes ls${Color_Off}"
+    exit 1
+   }
+   jq '.default_size="'$new_size'"' <"$account_path" >"$AXIOM_PATH"/tmp.json
+   mv "$AXIOM_PATH"/tmp.json "$account_path"
    echo -e "${Green}Successfully updated ~/.axiom/axiom.json to use ram $new_size in account: $current${Color_Off}"
    echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
   fi
  else
- old="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.default_size')"
- sizes_list | grep -q -w $new_size || { echo -e "${Red}Failed to find instance size with name: "$new_size"... exiting${Color_Off}" ; \
-  echo -e "${Red}To print all available intance sizes, run ax sizes ls${Color_Off}" ; exit 1; }
- jq '.default_size="'$new_size'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
- echo -e "${Green}Successfully updated default_size $old with new instance size $new_size in account: $current${Color_Off}"
- echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
+  old="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.default_size')"
+  sizes_list | grep -q -w $new_size || {
+   echo -e "${Red}Failed to find instance size with name: "$new_size"... exiting${Color_Off}"
+   echo -e "${Red}To print all available intance sizes, run ax sizes ls${Color_Off}"
+   exit 1
+  }
+  jq '.default_size="'$new_size'"' <"$account_path" >"$AXIOM_PATH"/tmp.json
+  mv "$AXIOM_PATH"/tmp.json "$account_path"
+  echo -e "${Green}Successfully updated default_size $old with new instance size $new_size in account: $current${Color_Off}"
+  echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
  fi
 
 # Restore default size if ax sizes default is used
@@ -220,18 +229,21 @@ elif [[ "$restore_default_size" == "true" ]]; then
  if [[ "$provider" == "ibm" ]]; then
   ram="$(echo $default_size | cut -d , -f 1)"
   cpu="$(echo $default_size | cut -d , -f 2)"
-  jq '.default_size="'$ram'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
-  jq '.cpu="'$cpu'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+  jq '.default_size="'$ram'"' <"$account_path" >"$AXIOM_PATH"/tmp.json
+  mv "$AXIOM_PATH"/tmp.json "$account_path"
+  jq '.cpu="'$cpu'"' <"$account_path" >"$AXIOM_PATH"/tmp.json
+  mv "$AXIOM_PATH"/tmp.json "$account_path"
   echo -e "${Green}Successfully restored default size, updated ~/.axiom/axiom.json to use ram: $ram and cpu: $cpu in account: $current${Color_Off}"
   echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
  else
-  jq '.default_size="'$default_size'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+  jq '.default_size="'$default_size'"' <"$account_path" >"$AXIOM_PATH"/tmp.json
+  mv "$AXIOM_PATH"/tmp.json "$account_path"
   echo -e "${Green}Successfully restored default size, updated ~/.axiom/axiom.json with default instance size $default_size in account: $current${Color_Off}"
   echo -e "${Green}Run axiom-init or axiom-fleet to use it!${Color_Off}"
-fi
+ fi
 
 # Valid command not provided
 ##
 else
-usage
+ usage
 fi
