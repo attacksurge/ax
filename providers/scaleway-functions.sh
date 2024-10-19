@@ -176,7 +176,8 @@ instance_id() {
 # List available instance sizes
 # Used by ax sizes
 sizes_list() {
-  scw instance  server-type list
+  region="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.region')"
+  scw instance  server-type list zone=$region
 }
 
 ###################################################################
