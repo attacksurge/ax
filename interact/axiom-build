@@ -343,6 +343,11 @@ elif [[ "$provider" == "hetzner" ]]; then
  jq '.op = "***************************************************************************************************************************"' |
  jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 
+elif [[ "$provider" == "scaleway" ]]; then
+ cat "$account_path" |jq '.secret_key = "************************************"'| \
+ jq '.op = "***************************************************************************************************************************"' |
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
+
 else
  cat "$account_path"
 fi

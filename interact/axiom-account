@@ -522,7 +522,71 @@ EOT
         echo -e "Not authenticated to hetzner-cloud CLI (hcloud)"
         bootstrap
     fi
-fi
+fi # end of hetzner
+
+# Install Scaleway CLI if not already installed, check token is valid or kick off bootstrap
+#
+if [[ "$provider" == "scaleway" ]]; then
+   installed_version=$(scw version -o json 2>/dev/null | jq -r .version)
+   if [[ "$(printf '%s\n' "$installed_version" "$ScalewayCliVersion" | sort -V | head -n 1)" != "$ScalewayCliVersion" ]]; then
+
+        # Handle macOS installation/update
+        if [[ $BASEOS == "Mac" ]]; then
+            whereis brew
+            if [ ! $? -eq 0 ] || [[ ! -z ${AXIOM_FORCEBREW+x} ]]; then
+                echo -e "${BGreen}Installing Homebrew...${Color_Off}"
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            else
+                echo -e "${BGreen}Checking for Homebrew... already installed.${Color_Off}"
+            fi
+                echo -e "${BGreen}Installing Scaleway CLI (hcloud)...${Color_Off}"
+                brew install scw
+
+        # Handle Linux installation/update
+        elif [[ $BASEOS == "Linux" ]]; then
+            if uname -a | grep -qi "Microsoft"; then
+                OS="UbuntuWSL"
+            else
+                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
+                if ! command -v lsb_release &> /dev/null; then
+                    OS="unknown-Linux"
+                    BASEOS="Linux"
+                fi
+            fi
+
+            # Install or update scaleway-cli on different Linux distributions
+            if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+                    pacman -S scaleway-cli
+            elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+                    echo -e "${BGreen}Installing Scaleway Cloud CLI (scw)...${Color_Off}"
+                    curl -s https://raw.githubusercontent.com/scaleway/scaleway-cli/master/scripts/get.sh | sh
+            elif [[ $OS == "Fedora" ]]; then
+                echo "Needs Conversation for Fedora"
+            fi
+        fi
+   fi
+
+    echo -e "${BGreen}Installing Scaleway packer plugin...${Color_Off}"
+    packer plugins install github.com/scaleway/scaleway
+
+    # Setup Scaleway account configuration
+    access_key="$(jq -r '.access_key' "$AXIOM_PATH/accounts/$1.json")"
+    secret_key="$(jq -r '.secret_key' "$AXIOM_PATH/accounts/$1.json")"
+    physical_region="$(jq -r '.physical_region' "$AXIOM_PATH/accounts/$1.json")"
+    region="$(jq -r '.region' "$AXIOM_PATH/accounts/$1.json")"
+
+    # Configure Scaleway CLI with credentials
+    echo -e "${BGreen}Configuring Scaleway CLI with credentials from $1.json...${Color_Off}"
+    scw config set access-key="$access_key" secret-key="$secret_key" default-region="$physical_region" default-zone="$region"
+
+    # Check if credentials are valid
+    if scw account project get &> /dev/null; then
+        echo -e "${BGreen}Scaleway account authenticated successfully.${Color_Off}"
+    else
+        echo -e "${Red}Scaleway account authentication failed. Please check your credentials.${Color_Off}"
+        bootstrap
+    fi
+fi # end of scaleway
 
 echo -e "${Green}Selected $1 successfully${Color_Off}"
 else
