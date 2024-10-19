@@ -33,7 +33,19 @@ function formatSeconds (){
 }
 
 ###########################################################################################################
+# output format, if --no-banners is used, redirect output to stderr
+#
+no_banners_redirect() {
+    if [[ "$show_banners" == "false" ]]; then
+        echo -e "$1" >/dev/null
+    else
+        echo -e "$1"
+    fi
+}
+
+###########################################################################################################
 # List path of all axiom modules and their commands axiom-scan --list
+#
 function list_modules() {
     echo -e "${BGreen}Printing available modules from ~/.axiom/modules${Color_Off}"
 
@@ -168,6 +180,7 @@ OUTPUT:
    --rm-logs             delete remote and local logs after scan completes, except for the unmered output files in ~/.axiom/logs/\$module+\$timestamp/output
    --no-logs             do not store any logs at all, do not tail terminal output. Delete all logs even the unmerged output files in ~/.axiom/logs/\$module+\$timestamp/output
    --stdout              only display stdout results to terminal (default displays stdout and stderr to the terminal)
+   --no-banners          do not show banners or runtime stats, only show stdout from scanners (useful for piping terminal output to other tools)
 
 FLEET:
    --custom-ssh string[]       path to custom SSH config file (default is located at ~/.axiom/.sshconfig)
@@ -213,7 +226,7 @@ clean_up() {
      # Check if Ctrl+C was pressed, if it was set scan_status to cancelled
      if [ "$ctrl_c_pressed" = true ]; then
       echo ""
-      echo -e "${Green}CTRL+C Interrupt, cleaning up and downloading output, please wait...${Color_Off}"
+      no_banners_redirect "${Green}CTRL+C Interrupt, cleaning up and downloading output, please wait...${Color_Off}"
       scan_status=cancelled
      else
       scan_status=completed
@@ -231,7 +244,10 @@ clean_up() {
       # Warn if any instance didn't create their $(hostname) file
       $interlace_cmd_nobar -c "$ssh_command _target_ \
        '[ -f $scan_dir/_target_ ] && echo _target_ scan finished || echo _target_ scan was still running but downloading partial results'  >> $warn_log 2>&1"
-      cat $warn_log | sort -n
+
+      if [ "$show_banners" = true ]; then
+       cat $warn_log | sort -n
+      fi
 
       # Download the results
       $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/output $tmp/output/_target_ --cache -F=$sshconfig >/dev/null 2>&1"
@@ -243,18 +259,15 @@ clean_up() {
      # If --download is used, download a user provided file from tmp scan working dir
      if [[ "$download_user_arg" != "false" ]]; then
       if [ -e "$(basename $download_file_path)" ]; then
-       new_download_file_path=$download_file_path+$RANDOM
-       echo -e "${BGreen}local file ${Color_Off}[ ${BBlue}$(basename $download_file_path) ${Color_Off} ] ${BGreen}already exists downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$(basename $new_download_file_path)${Color_Off} ]"
-       mkdir -p $(basename $new_download_file_path)
-       $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$download_file_path $(basename $new_download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
-       echo -e "${Green}arbitrary remote file downloaded successfully!${Color_Off}"
-      else
-       echo -e "${BGreen}downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$(basename $download_file_path)${Color_Off} ]"
-       mkdir -p $(basename $download_file_path)
-       $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:$download_file_path $(basename $download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
-       echo -e "${Green}arbitrary remote file downloaded successfully!${Color_Off}"
+       backup_timestamp=$(date +%Y-%m-%d_%H-%M-%S)
+       no_banners_redirect "${BYellow}File or folder already exists at ${Color_Off}[ ${BBlue}$(basename $download_file_path) ${Color_Off}]${BYellow} backing up to ${Color_Off}[ ${BBlue}$(basename $download_file_path)-$backup_timestamp ${Color_Off}]${BYellow} just in case.${Color_Off}"
+       mv "$(basename $download_file_path)" "$(basename $download_file_path)-$backup_timestamp"
       fi
-    fi
+       mkdir -p $(basename $download_file_path)
+       no_banners_redirect "${BGreen}downloading arbitrary remote file ${BGreen}to${Color_Off}: ${Color_Off}[ ${BBlue}$(basename $download_file_path)${Color_Off} ]"
+       $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp _target_:/home/op/scan/$uid/$download_file_path $(basename $download_file_path)/_target_ --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
+       no_banners_redirect "${Green}arbitrary remote file downloaded successfully!${Color_Off}"
+     fi
 
     # If delete logs is set to true, execute delete_logs function. if remove_all_logs is set to true, even remove the output folder in log file
     if [[ "$keeplogs" == "false" ]]; then
@@ -266,7 +279,7 @@ clean_up() {
     else
 
      # Kill tmux sessions with any orphaned proceses, exit all multiplexed SSH connections
-     echo -e "${BBlue}killing remote processes...please wait${Color_Off}"
+     no_banners_redirect "${BBlue}killing remote processes...please wait${Color_Off}"
      $interlace_cmd_nobar -c "$ssh_command _target_ 'tmux kill-session -t $uid'"  >/dev/null 2>&1
      $interlace_cmd_nobar -c "$ssh_exit_command _target_ " >/dev/null 2>&1
     fi
@@ -282,15 +295,17 @@ clean_up() {
     # Display exit stats about the scan such as log directory, normalize terminal
     json_stats="{\"scan\":{\"$module\":{\"id\":\"$uid\",\"extra_args\":"$escaped_extra_args",\"instances\":\"$total_instances\",\"targets\":\"$lines\",\"results\":\"$output_lines\",\"runtime\":\"$time\",\"date\":\"$starttime\",\"command\":$escapedcommand,\"threads\":\"$threads\",\"local_logs\":\"$AXIOM_PATH/logs/$uid\",\"remote_logs\":\"/home/op/scan/$uid\",\"output\":\"$(realpath $outfile)\",\"status\":\"$scan_status\"}}}"
     if jq -e . >/dev/null 2>&1 <<<"$json_stats"; then
-     echo -e "${BGreen}appending axiom-scan runtime statistics to:${Color_Off} [ ${BBlue}$AXIOM_PATH/stats.log${Color_Off} ]${BGreen} | ${Color_Off}"
+     no_banners_redirect "${BGreen}appending axiom-scan runtime statistics to:${Color_Off} [ ${BBlue}$AXIOM_PATH/stats.log${Color_Off} ]${BGreen} | ${Color_Off}"
      echo "$json_stats" | tee -a $AXIOM_PATH/stats.log  >> /dev/null 2>&1
     else
      echo -e "${Red}error parsing json runtime statistics, not appending axiom-scan statistics to${Color_Off}${BGreen} : $AXIOM_PATH/stats.log${Color_Off}"
     fi
-    echo -e "${BGreen}module: ${Color_Off}[${BBlue} $module ${Color_Off}]${BGreen} | ${BGreen}module args: ${Color_Off}[${BBlue} $args ${Color_Off}] ${BGreen}| ${BGreen}instances: ${Color_Off}[${BBlue} $total_instances ${Color_Off}]${BGreen} | ${BGreen}targets: ${Color_Off}[${BBlue} $lines targets ${Color_Off}]${BGreen} | ${BGreen}results: ${Color_Off}[${BBlue} $output_lines results ${Color_Off}]${BGreen} |"
-    echo -e "${BGreen}runtime: ${Color_Off}[${BBlue} $time ${Color_Off}]${BGreen} | ${BGreen}date: ${Color_Off}[${BBlue} $starttime ${Color_Off}]${BGreen} | ${BGreen}id: ${Color_Off}[${BBlue} "$uid" ${Color_Off}]${BGreen} |"
-    echo -e "${BGreen}output: ${Color_Off}[${BBlue} $(realpath $outfile) ${Color_Off}]${BGreen} | ${BGreen}log: ${Color_Off}[${BBlue} "$AXIOM_PATH/logs/$uid" ${Color_Off}]${BGreen} | ${BGreen}remote: ${Color_Off}[${BBlue} "/home/op/scan/$uid" ${Color_Off}] ${BGreen} |"
-    echo -e "${BGreen}command: ${Color_Off}[${BBlue} $command ${Color_Off}]${BGreen} | ${BGreen}ext: ${Color_Off}[${BBlue} "$ext" ${Color_Off}]${BGreen} | ${BGreen}threads: ${Color_Off}[${BBlue} "$threads" ${Color_Off}]${BGreen}"
+    if [ "$show_banners" = true ]; then
+     echo -e "${BGreen}module: ${Color_Off}[${BBlue} $module ${Color_Off}]${BGreen} | ${BGreen}module args: ${Color_Off}[${BBlue} $args ${Color_Off}] ${BGreen}| ${BGreen}instances: ${Color_Off}[${BBlue} $total_instances ${Color_Off}]${BGreen} | ${BGreen}targets: ${Color_Off}[${BBlue} $lines targets ${Color_Off}]${BGreen} | ${BGreen}results: ${Color_Off}[${BBlue} $output_lines results ${Color_Off}]${BGreen} |"
+     echo -e "${BGreen}runtime: ${Color_Off}[${BBlue} $time ${Color_Off}]${BGreen} | ${BGreen}date: ${Color_Off}[${BBlue} $starttime ${Color_Off}]${BGreen} | ${BGreen}id: ${Color_Off}[${BBlue} "$uid" ${Color_Off}]${BGreen} |"
+     echo -e "${BGreen}output: ${Color_Off}[${BBlue} $(realpath $outfile) ${Color_Off}]${BGreen} | ${BGreen}log: ${Color_Off}[${BBlue} "$AXIOM_PATH/logs/$uid" ${Color_Off}]${BGreen} | ${BGreen}remote: ${Color_Off}[${BBlue} "/home/op/scan/$uid" ${Color_Off}] ${BGreen} |"
+     echo -e "${BGreen}command: ${Color_Off}[${BBlue} $command ${Color_Off}]${BGreen} | ${BGreen}ext: ${Color_Off}[${BBlue} "$ext" ${Color_Off}]${BGreen} | ${BGreen}threads: ${Color_Off}[${BBlue} "$threads" ${Color_Off}]${BGreen}"
+    fi
     rm -r $socket_tmp >/dev/null 2>&1
     stty sane
     tput init
@@ -308,27 +323,27 @@ delete_logs() {
         exit 1
     fi
 
-    echo -e "${BBlue}Deleting remote logs for UID: ${uid}${Color_Off}"
+    no_banners_redirect "${BBlue}Deleting remote logs for UID: ${uid}${Color_Off}"
 
     $interlace_cmd_nobar -c "$ssh_command _target_ 'if [ -d /home/op/scan/${uid} ]; then cd /home/op/scan/${uid} && sudo rm -r *; else echo Remote directory does not exist; fi'" >/dev/null 2>&1
 
-    echo -e "${BBlue}Killing remote processes for UID: ${uid}${Color_Off}"
+    no_banners_redirect "${BBlue}Killing remote processes for UID: ${uid}${Color_Off}"
     $interlace_cmd_nobar -c "$ssh_command _target_ 'tmux kill-session -t $uid'" >/dev/null 2>&1
     $interlace_cmd_nobar -c "$ssh_exit_command _target_" >/dev/null 2>&1
 
     if [ -d "$AXIOM_PATH/tmp/$uid/" ]; then
-        echo -e "${BBlue}Changing to local directory: $AXIOM_PATH/tmp/$uid/${Color_Off}"
-        cd "$AXIOM_PATH/tmp/$uid/" || { echo -e "${Red}Error: Failed to change directory. Exiting.${Color_Off}"; exit 1; }
+        no_banners_redirect "${BBlue}Changing to local directory: $AXIOM_PATH/tmp/$uid/${Color_Off}"
+        cd "$AXIOM_PATH/tmp/$uid/" || { echo -e "${Red}Error: Failed to change directory. Exiting.${Color_Off}" >&2; exit 1; }
 
         if [[ "$1" == "all" ]]; then
-            echo -e "${BBlue}Deleting all local logs, including ${Color_Off}[ ${BGreen}$AXIOM_PATH/logs/$uid/output/${Color_Off} ]"
+            no_banners_redirect "${BBlue}Deleting all local logs, including ${Color_Off}[ ${BGreen}$AXIOM_PATH/logs/$uid/output/${Color_Off} ]"
             find . -exec rm -r {} + >/dev/null 2>&1  # Delete everything, including output and status
         else
-            echo -e "${BBlue}Deleting local logs, except for ${Color_Off} [${BGreen}$AXIOM_PATH/logs/$uid/output/${Color_Off} ]"
+            no_banners_redirect "${BBlue}Deleting local logs, except for ${Color_Off} [${BGreen}$AXIOM_PATH/logs/$uid/output/${Color_Off} ]"
             ls | grep -v output | xargs rm -r >/dev/null 2>&1
         fi
     else
-        echo -e "${Red}Error: Local log folder does not exist.${Color_Off}"
+        no_banners_redirect "${Red}Error: Local log folder does not exist.${Color_Off}"
     fi
 }
 
@@ -458,13 +473,13 @@ merge_output() {
     if [[ "$anew" != "true" ]];  then
      if [ -e "$outfile" ]; then
       backup_timestamp=$(date +%Y-%m-%d_%H-%M-%S)
-      echo -e "${BYellow}File or folder already exists at ${Color_Off}[${BBlue} "$outfile" ${Color_Off}]${BYellow} backing up to ${Color_Off}[${BBlue} "$outfile-$backup_timestamp" ${Color_Off}]${BYellow} just in case.${Color_Off}"
+      no_banners_redirect "${BYellow}File or folder already exists at ${Color_Off}[${BBlue} "$outfile" ${Color_Off}]${BYellow} backing up to ${Color_Off}[${BBlue} "$outfile-$backup_timestamp" ${Color_Off}]${BYellow} just in case.${Color_Off}"
       mv "$outfile" "$outfile-$backup_timestamp"
      fi
     else
      if ! [ -x "$(command -v anew)" ]; then
       if ! [ -x "$(command -v go)" ]; then
-       echo -e "${BRed}Warning: anew not installed and neither is Golang (so we cant install anew). Defaulting to the module extension without using anew${Color_Off}"
+       no_banners_redirect "${BRed}Warning: anew not installed and neither is Golang (so we cant install anew). Defaulting to the module extension without using anew${Color_Off}"
        anew="false"
       else
        go install github.com/tomnomnom/anew@latest >> /dev/null 2>&1
@@ -472,7 +487,7 @@ merge_output() {
      fi
     fi
    if [[ "$ext" == "txt" ]] ; then
-        echo "mode set to $ext.. combining results into one file."
+        no_banners_redirect "mode set to $ext.. combining results into one file."
         find $tmp/output/ -type f -exec cat {} \; > $tmp/merge
         if [[ "$anew" == "true" ]]; then
             cat "$tmp/merge" | anew "$outfile"
@@ -481,7 +496,7 @@ merge_output() {
         fi
         output_lines=$(wc -l $outfile | tr -s ' ' | cut -d ' ' -f 1)
    elif [[ "$ext" == "oG" ]] || [[ "$ext" == "jsonl" ]]; then
-        echo "mode set to $ext.. sorting unique."
+        no_banners_redirect "mode set to $ext.. sorting unique."
         find $tmp/output/ -type f -exec cat {} \; | sort -u > $tmp/merge
         if [[ "$anew" == "true" ]]; then
             cat "$tmp/merge" | anew "$outfile"
@@ -490,7 +505,7 @@ merge_output() {
         fi
         output_lines=$(wc -l $outfile | tr -s ' ' | cut -d ' ' -f 1)
    elif [[ "$ext" == "xml" ]]; then
-        echo "Mode set to XML.. Merging Nmap XML output..."
+        no_banners_redirect "Mode set to XML.. Merging Nmap XML output..."
         mkdir $tmp/merge
         find $tmp/output -type f -print0 | xargs -0 -I{} cp --backup=t {} $tmp/merge
         output_lines=$(ls $tmp/merge | wc -l)
@@ -498,7 +513,7 @@ merge_output() {
         mv "$tmp/merge.xml" "$outfile"
         mv "$tmp/merge.xml.html" "$outfile.html"
   elif [[ "$ext" == "csv" ]]; then
-        echo "Mode set to CSV, merging..."
+        no_banners_redirect "Mode set to CSV, merging..."
         header="$(find $tmp/output/ -type f -exec head -n 1 {} \; | sort -u )"
         echo "$header" > $tmp/merge
         find $tmp/output/ -type f -exec cat {} \; | grep -v "$header" | sort -u -V >> $tmp/merge
@@ -509,26 +524,26 @@ merge_output() {
         fi
         output_lines=$(wc -l $outfile | tr -s ' ' | cut -d ' ' -f 1)
   elif [[ "$ext" == "none" ]]; then
-        echo "Mode set to none, not merging..."
+        no_banners_redirect "Mode set to none, not merging..."
         mv $tmp/output "$outfile"
         output_lines=$(ls $outfile | wc -l)
   elif [[ "$ext" == "" ]] || [[ "$ext" == "dir" ]];  then
-        echo "Mode set to directory... Merging directories..."
+        no_banners_redirect "Mode set to directory... Merging directories..."
         mkdir $tmp/merge
         find $tmp/output -type f -print0 | xargs -0 -I{} cp --backup=t {} $tmp/merge
         output_lines=$(ls $tmp/merge | wc -l)
         mv $tmp/merge "$outfile"
         if [[ "$module" == "gowitness" ]]; then
          if ! [ -x "$(command -v gowitness)" ]; then
-          echo -e "${BBlue}Installing gowitness...${Color_Off}"
+          no_banners_redirect "${BBlue}Installing gowitness...${Color_Off}"
           go install github.com/sensepost/gowitness@latest
          fi
-        echo "Downloading gowitness databases..."
+        no_banners_redirect "Downloading gowitness databases..."
         mkdir -p "$tmp/dbs/"
         $interlace_cmd_nobar -c "axiom-scp _target_:$scan_dir/gowitness.sqlite3 $tmp/dbs/_target_.sqlite3 --cache -F=$sshconfig>> /dev/null"
-        echo "Merging databases..."
+        no_banners_redirect "Merging databases..."
         gowitness report merge --source-path "$tmp/" --output-file  "$outfile/gowitness.sqlite3"
-        echo -e "${Green}RUN: '${BBlue}gowitness report server --db-uri sqlite://$outfile/gowitness.sqlite3 --screenshot-path $outfile/${Color_Off}' for reporting"
+        no_banners_redirect "${Green}RUN: '${BBlue}gowitness report server --db-uri sqlite://$outfile/gowitness.sqlite3 --screenshot-path $outfile/${Color_Off}' for reporting"
         fi
     fi
 }
@@ -577,6 +592,7 @@ track_finished="false"
 extra_args=""
 backwards_compatibility_nuclei_templates="false"
 ctrl_c_pressed="false"
+show_banners="true"
 
 ###########################################################################################################
 #  Parse command line arguments
@@ -879,6 +895,12 @@ do
             set=true
             pass+=($i)
         fi
+        if [[ "$arg" == "--no-banners" ]]; then
+            show_banners="false"
+            no_banners_redirect="> /dev/null"
+            set=true
+            pass+=($i)
+        fi
         if [[ "$arg" == "--extra-args" ]]; then
             n=$((i+1))
             #extra_args=$(echo ${!n})
@@ -932,7 +954,10 @@ echo '
 echo ''
 
 }
+
+if [ "$show_banners" = true ]; then
 banner
+fi
 
 ###########################################################################################################
 # Display Help Menu
@@ -1018,7 +1043,7 @@ if [[ "$spinup" -gt 0 ]]; then
         "$AXIOM_PATH/interact/axiom-fleet" "$fleet" -i "$spinup" -r "$cycle_regions"
         spinup_start=01; spinup_end=0${spinup}; for spinup_num in $(seq $spinup_start $spinup_end); do echo $(echo $fleet)0$spinup_num; done >> "$tmp/hosts"
     fi
-    echo -e "${Green}Waiting 60 seconds before scan...${Color_Off}"
+    no_banners_redirect "${Green}Waiting 60 seconds before scan...${Color_Off}"
     sleep 60
 fi
 
@@ -1229,7 +1254,7 @@ fi
 #  If a one-shot module is used or a module using a directory as an extension ("ext":"dir"):
 #  Prep all the axiom instances by making a unique scan working directory and output directory (mkdir -p $scan_dir/output)
 #
-echo -e "${BGreen}creating scan working directory at${Color_Off}: [ ${BBlue}/home/op/scan/$uid/${Color_Off} ${Color_Off}]${BGreen} | ${Color_Off}"
+no_banners_redirect "${BGreen}creating scan working directory at${Color_Off}: [ ${BBlue}/home/op/scan/$uid/${Color_Off} ${Color_Off}]${BGreen} | ${Color_Off}"
 if ([[ "$rawcommand" =~ "_target_" ]] || [[ "$rawcommand" =~  "_safe-target_" ]] || [[ "$ext" ==  "" ]] || [[ "$ext" == "dir" ]]) && [[ "$disable_oneshot" != "true" ]]; then
     $interlace_cmd_nobar -c "$ssh_command _target_ 'mkdir -p $scan_dir/output'" >/dev/null 2>&1
 else
@@ -1245,16 +1270,16 @@ fi
 #  If -wL (wordlist-local) is present in the command line, upload a user provided wordlist to use.
 #
 if [[ -f "$local_wordlist" ]]; then
-    echo -e "${BGreen}uploading local wordlist${Color_Off}${BBlue} : $local_wordlist_filename${Color_Off} to ${BBlue}$destination_wordlist...${Color_Off}"
+    no_banners_redirect "${BGreen}uploading local wordlist${Color_Off}${BBlue} : $local_wordlist_filename${Color_Off} to ${BBlue}$destination_wordlist...${Color_Off}"
     interlace --no-bar --silent -threads $total_instances -tL "$tmp/selected.conf" -c "$AXIOM_PATH/interact/axiom-scp $local_wordlist  _target_:$destination_wordlist --cache -F=$sshconfig >> /dev/null"
-    echo -e "${Green}wordlist uploaded successfully!${Color_Off}"
+    no_banners_redirect "${Green}wordlist uploaded successfully!${Color_Off}"
 fi
 
 ###########################################################################################################
 #  If -wD or --distribute-wordlist is present in the command line, split and upload the user provided wordlist.
 #
 if [[ "$distribute_wordlist" != "false" ]]; then
-    echo -e "${BGreen}splitting and uploading local wordlist${Color_Off}${BBlue} : $distribute_wordlist_filename${Color_Off} to ${BBlue}$destination_wordlist...${Color_Off}"
+    no_banners_redirect "${BGreen}splitting and uploading local wordlist${Color_Off}${BBlue} : $distribute_wordlist_filename${Color_Off} to ${BBlue}$destination_wordlist...${Color_Off}"
     mkdir -p $tmp/distribute_wordlist/split
     mkdir -p $tmp/distribute_wordlist/input
     cp "$tmp/selected.conf" "$tmp/distribute_wordlist/selected.conf"
@@ -1264,7 +1289,7 @@ if [[ "$distribute_wordlist" != "false" ]]; then
     # hack to stop overwriting $lines and $tmp
     lines=$lines1 && tmp=$tmp1 && divisor=$divisor1
     $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp $tmp/distribute_wordlist/input/_target_ _target_:$destination_wordlist --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
-    echo -e "${Green}distributed wordlist successfully!${Color_Off}"
+    no_banners_redirect "${Green}distributed wordlist successfully!${Color_Off}"
 fi
 
 ###########################################################################################################
@@ -1275,9 +1300,9 @@ if [[ "$local_folder" != "false" ]]; then
         local_folder_filename="$(echo "$local_folder" | tr '/' ' ' | awk '{ print $NF }')"
         destination_folder="/home/op/scan/$uid/$local_folder_filename"
         folder="$destination_folder"
-        echo -e "${BGreen}uploading local folder ${Color_Off}: ${BBlue} $local_folder${Color_Off} to ${BBlue}$destination_folder...${Color_Off}"
+        no_banners_redirect "${BGreen}uploading local folder ${Color_Off}: ${BBlue} $local_folder${Color_Off} to ${BBlue}$destination_folder...${Color_Off}"
         interlace --no-bar --silent -threads $total_instances -tL "$tmp/selected.conf" -c "$AXIOM_PATH/interact/axiom-scp $local_folder _target_:$destination_folder/ --cache -F=$sshconfig >> /dev/null"
-        echo -e "${Green}custom folder uploaded successfully!${Color_Off}"
+        no_banners_redirect "${Green}custom folder uploaded successfully!${Color_Off}"
  fi
 fi
 
@@ -1289,9 +1314,9 @@ if [[ "$local_config" != "false" ]]; then
   user_config_filename="$(echo "$local_config" | tr '/' ' ' | awk '{ print $NF }')"
   destination_config="/home/op/scan/$uid/$user_config_filename"
   config_file="$destination_config"
-  echo -e "${BGreen}uploading local config file${Color_Off}${BBlue} : $local_config${Color_Off} to ${BBlue}$destination_config...${Color_Off}"
+  no_banners_redirect "${BGreen}uploading local config file${Color_Off}${BBlue} : $local_config${Color_Off} to ${BBlue}$destination_config...${Color_Off}"
   interlace --no-bar --silent -threads $total_instances -tL "$tmp/selected.conf" -c "$AXIOM_PATH/interact/axiom-scp $local_config _target_:$destination_config --cache -F=$sshconfig >> /dev/null"
-  echo -e "${Green}local config uploaded successfully!${Color_Off}"
+  no_banners_redirect "${Green}local config uploaded successfully!${Color_Off}"
  fi
 fi
 
@@ -1300,10 +1325,10 @@ fi
 #
 if [[ "$upload_user_arg" != "false" ]]; then
  if [[ -f "$upload_file_path" ]]; then
-  echo -e "${BGreen}uploading arbitrary local file \
+  no_banners_redirect "${BGreen}uploading arbitrary local file \
 ${Color_Off}[ ${BBlue}$upload_file_path${Color_Off} ] ${BGreen}to${Color_Off}: ${Color_Off} [ ${BBlue}$scan_dir/$(basename $upload_file_path)${Color_Off} ${Color_Off}]${BGreen} | ${Color_Off}"
   $interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp $upload_file_path _target_:$scan_dir/$(basename $upload_file_path) --cache -F=$sshconfig >/dev/null 2>&1" | grep -v "Gen"
-  echo -e "${Green}arbitrary local file uploaded successfully!${Color_Off}"
+  no_banners_redirect "${Green}arbitrary local file uploaded successfully!${Color_Off}"
  else
   echo -e "${Red}Error: arbitrary local file file not found '$upload_file_path'...${Color_Off}"
   exit 1
@@ -1326,8 +1351,8 @@ fi
 #
 if [[ "$backwards_compatibility_nuclei_templates" == "true" ]]; then
  if [[ "$command" =~ "_wordlist_" ]]; then
-  echo -e "${BYellow}Warning: using --nuclei-templates with variable replacement _wordlist_ in the module, instead of --local-folder with variable replacement _folder_"
-  echo -e "We have added backwards compatiblity for this but when uploading nuclei templates you are encouraged to change _wordlist_ in the module to _folder_ and use --local-folder instead${Color_Off}"
+  no_banners_redirect "${BYellow}Warning: using --nuclei-templates with variable replacement _wordlist_ in the module, instead of --local-folder with variable replacement _folder_"
+  no_banners_redirect "We have added backwards compatiblity for this but when uploading nuclei templates you are encouraged to change _wordlist_ in the module to _folder_ and use --local-folder instead${Color_Off}"
   sleep 3
   command=${command//_wordlist_/_folder_}
  fi
@@ -1377,7 +1402,7 @@ fi
 #  if --expand-cidr is used, expand any cidrs in the target list
 #
 if [[ "$expand_cidr" == "true" ]]; then
-    echo -e "${BBlue}expanding cidrs in target list...${Color_Off}"
+    no_banners_redirect "${BBlue}expanding cidrs in target list...${Color_Off}"
     "$AXIOM_PATH/interact/expand_cidr.py" "$input_file" --silent > $tmp/expanded_input
     input_file=$(echo $tmp/expanded_input)
     lines="$(wc -l "$input_file" | awk '{ print $1 }')"
@@ -1386,19 +1411,19 @@ fi
 ###########################################################################################################
 #  Display some stats prior to scanning
 #
-echo -e "${BGreen}module: ${Color_Off}[${BBlue} $module ${Color_Off}]${BGreen} | ${BGreen}module args: ${Color_Off}[${BBlue} $args ${Color_Off}] ${BGreen}| ${BGreen}input: ${Color_Off}[${BBlue} $lines lines ${Color_Off}]${BGreen} |"
-echo -e "${BGreen}instances: ${BBlue} $total_instances  ${Color_Off}[${BBlue} $(echo $instances | tr '\n' ' ')${Color_Off}]${BGreen} |"
-echo -e "${BGreen}command: ${Color_Off}[${BBlue} $command ${Color_Off}]${BGreen} | ${BGreen}ext: ${Color_Off}[${BBlue} "$ext" ${Color_Off}]${BGreen} | ${BGreen}threads: ${Color_Off}[${BBlue} "$threads" ${Color_Off}]${BGreen} |${Color_Off}"
+no_banners_redirect "${BGreen}module: ${Color_Off}[${BBlue} $module ${Color_Off}]${BGreen} | ${BGreen}module args: ${Color_Off}[${BBlue} $args ${Color_Off}] ${BGreen}| ${BGreen}input: ${Color_Off}[${BBlue} $lines lines ${Color_Off}]${BGreen} |"
+no_banners_redirect "${BGreen}instances: ${BBlue} $total_instances  ${Color_Off}[${BBlue} $(echo $instances | tr '\n' ' ')${Color_Off}]${BGreen} |"
+no_banners_redirect "${BGreen}command: ${Color_Off}[${BBlue} $command ${Color_Off}]${BGreen} | ${BGreen}ext: ${Color_Off}[${BBlue} "$ext" ${Color_Off}]${BGreen} | ${BGreen}threads: ${Color_Off}[${BBlue} "$threads" ${Color_Off}]${BGreen} |${Color_Off}"
 
 ###########################################################################################################
 #  split target list or copy target list  (--dont-split)
 #  delete expanded_input if --expand-cidr is used
 #
 if [[ "$split" == "true" ]]; then
-    echo -e "${BGreen}split: ${Color_Off}[ ${BBlue}spliting input file with${BGreen} $lines lines${BBlue} and distributing file across${BGreen} $total_instances${BBlue} instances ${Color_Off}]${BGreen}...${Color_Off}"
+    no_banners_redirect "${BGreen}split: ${Color_Off}[ ${BBlue}spliting input file with${BGreen} $lines lines${BBlue} and distributing file across${BGreen} $total_instances${BBlue} instances ${Color_Off}]${BGreen}...${Color_Off}"
     split_file "$input_file" "$total_instances" "$tmp"
 else
-    echo -e "${BGreen}copy: ${Color_Off}[ ${BBlue}copying input file with${BGreen} $lines lines${BBlue} and uploading file to ${BGreen}$total_instances${BBlue} instances ${Color_Off}]${BGreen}...${Color_Off}"
+    no_banners_redirect "${BGreen}copy: ${Color_Off}[ ${BBlue}copying input file with${BGreen} $lines lines${BBlue} and uploading file to ${BGreen}$total_instances${BBlue} instances ${Color_Off}]${BGreen}...${Color_Off}"
     for i in $(echo $instances); do cp "$input_file" $tmp/input/$i ; done
 fi
 
@@ -1409,7 +1434,7 @@ fi
 ###########################################################################################################
 #  use axiom-scp to upload each input file to a remote instance
 #
-$interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp $tmp/input/_target_ _target_:$scan_dir/input --cache -F=$sshconfig >/dev/null 2>&1; touch $tmp/logs/_target_" && echo -n -e "[ ${Green}OK${Color_Off} ]\n" || echo -n -e "[ ${Red}FAIL${Color_Off} ]\n" 
+$interlace_cmd_nobar -c "$AXIOM_PATH/interact/axiom-scp $tmp/input/_target_ _target_:$scan_dir/input --cache -F=$sshconfig >/dev/null 2>&1; touch $tmp/logs/_target_" && no_banners_redirect "[ ${Green}OK${Color_Off} ]\n" || no_banners_redirect "[ ${Red}FAIL${Color_Off} ]\n"
 
 ###########################################################################################################
 #  This function is spanwed in the background and periodically probes all instances to see if their part of the scan has completed.
@@ -1496,7 +1521,7 @@ done
 ###########################################################################################################
 #  display STDOUT only flag (--stdout). default displays stdout & stderr
 #
-if [[ "$stdout_only" == "true" ]]; then
+if [[ "$stdout_only" == "true" ]] || [[ "$show_banners" == "false" ]]; then
     stderr_log="/dev/null"
     tail_suppress_headers="-q"
 else
@@ -1568,7 +1593,7 @@ echo $remotetailPID > $tmp/status/remotetailPID
 
 # ONE-SHOT modules run an Interlace command on the remote instances
 if [[ "$one_shot_module" == "true" ]]; then
- echo -e "${BRed}[*]${Red} ENABLING ONESHOT MODE! STARTING $(($total_instances * $threads)) TOTAL THREADS. Using $threads threads per instance with $total_instances instances...${Color_Off}"
+ no_banners_redirect "${BRed}[*]${Red} ENABLING ONESHOT MODE! STARTING $(($total_instances * $threads)) TOTAL THREADS. Using $threads threads per instance with $total_instances instances...${Color_Off}"
  sleep 3
  $interlace_cmd_nobar -c "$ssh_command _target_ 'tmux new -d -s $uid && \
   tmux send-keys -t $uid \"cd $scan_dir; \
