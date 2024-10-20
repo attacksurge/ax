@@ -23,6 +23,7 @@ source "scaleway" "packer" {
   commercial_type = var.default_size
   ssh_username = "root"
   image_name = var.snapshot_name
+  snapshot_name = var.snapshot_name
 
 }
 

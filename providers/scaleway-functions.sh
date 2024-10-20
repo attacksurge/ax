@@ -27,17 +27,21 @@ delete_instance() {
     name="$1"
     force="$2"
 
-    instance_id=$(scw instance server list | grep "$name" | awk '{print $1}')
+    data=$(instances)
+    instance_id=$(echo $data | jq -r '.[] | select(.name=="'$name'") | .id')
+    ip=$(echo $data | jq -r '.[] | select(.name=="'$name'") | .public_ip.address')
 
     if [ "$force" == "true" ]; then
+        echo -e "${Red}...powering off and deleting $name...${Color_Off}"
         scw instance server delete "$instance_id" force-shutdown=true
-
+        scw instance ip delete "$ip"
     else
-       echo -e -n "  Are you sure you want to delete $name (y/N) - default NO: "
+       echo -e -n "Are you sure you want to delete $name (y/N) - default NO: "
        read ans
        if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-        echo -e "${Red}...deleting $name...${Color_Off}"
+        echo -e "${Red}...powering off and deleting $name...${Color_Off}"
         scw instance server delete "$instance_id" force-shutdown=true
+        scw instance ip delete "$ip"
        fi
     fi
 }
@@ -200,10 +204,12 @@ delete_snapshot() {
 }
 
 # axiom-images
-create_snapshots() {
+create_snapshot() {
     instance="$1"
     image_name="$2"
-    scw instance server create-image "$(instance_id $instance)" name="$image_name"
+    data=$(instances)
+    snapshot_id=$(echo "$data" | jq -r '.[] | select(.name=="'$instance'") .image.root_volume.id')
+    scw instance image create snapshot-id="$snapshot_id" name="$image_name" arch=x86_64
 }
 
 ###################################################################
