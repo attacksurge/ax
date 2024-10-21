@@ -20,7 +20,7 @@ Once Ax is set up and configured, you can deploy a fleet of 50-100+ instances in
 
 Ax attempts to follow the Unix philosophy by providing building blocks that allow users to easily orchestrate one or many cloud instances. This flexibility enables the creation of continuous scanning pipelines and the execution of general, one-off, highly parallelized workloads.
 
-Currently Digital Ocean, IBM Cloud, Linode, Azure, AWS, Hetzner and GCP are officially supported cloud providers.
+Currently Digital Ocean, IBM Cloud, Linode, Azure, AWS, Hetzner, GCP and Scaleway are officially supported cloud providers.
 
 # Resources
 
@@ -45,45 +45,51 @@ Currently Digital Ocean, IBM Cloud, Linode, Azure, AWS, Hetzner and GCP are offi
 Digital Ocean is still our best and most supported cloud provider. If you're signing up for a new Digital Ocean account, [please use this link](https://m.do.co/c/541daa5b4786) for a $200 free credit!
 <p align="center">
 <a href="https://m.do.co/c/541daa5b4786" target="_blank"> 
-<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/digitalocean_referral.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/digitalocean.png"/>
 </a> 
 </p>
 
 IBM Cloud is still our best supported business provider! If you're signing up for a new IBM Cloud account, [please use this link](https://cloud.ibm.com/docs/overview?topic=overview-tutorial-try-for-free) for $200 free credit!
 <p align="center">
 <a href="https://cloud.ibm.com/docs/overview?topic=overview-tutorial-try-for-free" target="_blank"> 
-<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/ibm_cloud_referral_new.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/ibm_cloud.png"/>
 </a> 
 </p>
 
 Linode is an absoutely fantastic cloud provider and fully supported! If you're signing up for a new Linode account, [please use this link](https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d) for $100 free credit!
 <p align="center">
 <a href="https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d" target="_blank"> 
-<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/linode-referral.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/linode.png"/>
 </a> 
 </p>
 
 <p align="center">
 <a href="https://azure.com" target="_blank"> 
-<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/azure_referral.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/azure.png"/>
 </a> 
 </p>
 
 <p align="center">
 <a href="https://aws.com" target="_blank"> 
-<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/aws_dark_referral.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/aws.png"/>
 </a> 
 </p>
 
 <p align="center">
 <a href="https://console.hetzner.cloud" target="_blank">
-<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/hetzner-refferal.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/hetzner.png"/>
 </a>
 </p>
 
 <p align="center">
 <a href="https://cloud.google.com/free/docs/free-cloud-features" target="_blank">
-<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/gcp-refferal.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/gcp.png"/>
+</a>
+</p>
+
+<p align="center">
+<a href="https://www.scaleway.com/en/scaleway-vs-digitalocean/" target="_blank">
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/scaleway.png"/>
 </a>
 </p>
 

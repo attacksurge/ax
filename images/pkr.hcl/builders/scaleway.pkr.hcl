@@ -24,7 +24,7 @@ source "scaleway" "packer" {
   ssh_username = "root"
   image_name = var.snapshot_name
   snapshot_name = var.snapshot_name
-
+  remove_volume = "true"
 }
 
 build {

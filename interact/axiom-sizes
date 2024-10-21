@@ -67,8 +67,14 @@ get_default_size() {
   elif [[ "$provider" == "linode" ]]; then
     default_size="g6-standard-1"
 
+  elif [[ "$provider" == "gcp" ]]; then
+    default_size="n1-standard-1"
+
   elif [[ "$provider" == "hetzner" ]]; then
     default_size="cx22"
+
+  elif [[ "$provider" == "scaleway" ]]; then
+    default_size="DEV1-S"
 
   else
     echo "Error: Unknown provider '$provider'"
@@ -184,6 +190,12 @@ elif [[ "$list" == "true" ]]; then
 # Use new instance size by name. Run axiom-init or axiom-fleet to use after updating
 #
 elif [[ "$use" == "true" ]]; then
+ # Check if size is unset or emtpy
+ if [ -z "${new_size+x}" ] || [ -z "$new_size" ]; then
+  echo -e "${Red}No size provided, unable to select size.. exiting${Color_Off}"
+  exit
+ fi
+
  if [[ "$provider" == "ibm" ]]; then
   if [[ "$new_size" =~ ',' ]]; then
    old="$(cat "$AXIOM_PATH/axiom.json" | jq -r '. | "\(.default_size) \(.cpu)"')"
