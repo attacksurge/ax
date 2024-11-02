@@ -58,7 +58,7 @@ delete_instances() {
 
     # Force deletion: Delete all instances without prompting
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting GCP instances: ${all_instance_names[@]}...${Color_Off}"
+        echo -e "${Red}Deleting instances: ${all_instance_names[@]}...${Color_Off}"
         # Delete instances in bulk by zone
         for zone in $(printf "%s\n" "${all_instance_zones[@]}" | sort -u); do
             instances_to_delete=()
@@ -94,7 +94,7 @@ delete_instances() {
 
         # Delete confirmed instances in bulk by zone
         if [ ${#confirmed_instance_names[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting GCP instances ${confirmed_instance_names[@]}...${Color_Off}"
+            echo -e "${Red}Deleting instances: ${confirmed_instance_names[@]}...${Color_Off}"
             for zone in $(printf "%s\n" "${confirmed_instance_zones[@]}" | sort -u); do
                 instances_to_delete=()
                 for i in "${!confirmed_instance_names[@]}"; do
@@ -304,5 +304,6 @@ instance_disk() {
 # Used by ax sizes
 #
 sizes_list() {
-    gcloud compute machine-types list --format="table(name, zone, guestCpus, memoryMb)"
+    region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
+    gcloud compute machine-types list --filter="zone:($region)" --format="table(name, zone, guestCpus, memoryMb)"
 }

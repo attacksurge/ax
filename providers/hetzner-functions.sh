@@ -83,7 +83,7 @@ delete_instances() {
 
     # Force deletion: Delete all instances without prompting
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting Hetzner Cloud instances: ${all_instance_names[@]}...${Color_Off}"
+        echo -e "${Red}Deleting instances: ${all_instance_names[@]}...${Color_Off}"
         hcloud server delete "${all_instance_ids[@]}" --poll-interval 30s --quiet &
 
     # Prompt for each instance if force is not true
@@ -108,7 +108,7 @@ delete_instances() {
 
         # Delete confirmed instances in bulk
         if [ ${#confirmed_instance_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting Hetzner Cloud instances ${confirmed_instance_names[@]}...${Color_Off}"
+            echo -e "${Red}Deleting instances ${confirmed_instance_names[@]}...${Color_Off}"
             hcloud server delete "${confirmed_instance_ids[@]}" --poll-interval 30s --quiet &
         else
             echo -e "${BRed}No instances were confirmed for deletion.${Color_Off}"

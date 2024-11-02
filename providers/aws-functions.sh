@@ -48,7 +48,7 @@ delete_instances() {
 
     # Force deletion: Delete all instances without prompting
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting AWS instances: ${instance_names[@]}...${Color_Off}"
+        echo -e "${Red}Deleting instances: ${instance_names[@]}...${Color_Off}"
         aws ec2 terminate-instances --instance-ids "${instance_ids[@]}" >/dev/null 2>&1
 
     # Prompt for each instance if force is not true
@@ -73,7 +73,7 @@ delete_instances() {
 
         # Delete confirmed instances in bulk
         if [ ${#confirmed_instance_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting AWS instances: ${confirmed_instance_names[@]}...${Color_Off}"
+            echo -e "${Red}Deleting instances: ${confirmed_instance_names[@]}...${Color_Off}"
             aws ec2 terminate-instances --instance-ids "${confirmed_instance_ids[@]}" >/dev/null 2>&1
         fi
     fi

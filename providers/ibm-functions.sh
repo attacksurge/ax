@@ -44,7 +44,7 @@ delete_instances() {
     done
 
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting IBM Cloud instances $names (IDs: ${instance_ids[@]})...${Color_Off}"
+        echo -e "${Red}Deleting instances $names...${Color_Off}"
         for id in "${instance_ids[@]}"; do
             ibmcloud sl vs cancel "$id" -f
         done
@@ -57,7 +57,7 @@ delete_instances() {
                 continue
             fi
 
-            echo -e "${Red}Deleting IBM Cloud instance '$instance_name' (ID: $id)...${Color_Off}"
+            echo -e "${Red}Deleting instance '$instance_name' (ID: $id)...${Color_Off}"
             ibmcloud sl vs cancel "$id" -f
         done
     fi

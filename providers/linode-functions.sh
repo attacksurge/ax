@@ -50,7 +50,7 @@ delete_instances() {
             fi
         fi
 
-        echo -e "${Red}Deleting Linode '$name' (Linode ID: $id)...${Color_Off}"
+        echo -e "${Red}Deleting instance: '$name' (Linode ID: $id)...${Color_Off}"
         linode-cli linodes delete "$id"
     done
 }

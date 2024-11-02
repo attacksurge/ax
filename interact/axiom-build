@@ -348,6 +348,11 @@ elif [[ "$provider" == "scaleway" ]]; then
  jq '.op = "***************************************************************************************************************************"' |
  jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 
+elif [[ "$provider" == "gcp" ]]; then
+ cat "$account_path" | \
+ jq '.op = "***************************************************************************************************************************"' |
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
+
 else
  cat "$account_path"
 fi

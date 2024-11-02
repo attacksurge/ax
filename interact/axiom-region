@@ -1,22 +1,37 @@
 #!/bin/bash
 
 AXIOM_PATH="$HOME/.axiom"
+provider="$(jq -r '.provider' "$AXIOM_PATH"/axiom.json)"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 source "$AXIOM_PATH/interact/includes/functions.sh"
+account_path=$(ls -la $AXIOM_PATH/axiom.json | rev | cut -d " " -f 1 | rev)
 
 if [ "$1" == "ls" ]
 then
-    list_regions
+	list_regions
 elif [ "$1" == "select" ]
 then
 	region_json=$(regions)
 	lines=$(echo $region_json | grep "$2" | wc -l | awk '{ print $1 }')
-	
+
 	if [ "$lines" -gt 0 ]
 	then
 		echo -e "${BWhite}Selected region $2${Color_Off}"
 		cat $AXIOM_PATH/axiom.json | jq -r ".region=\"$2\"" | jq -r > $AXIOM_PATH/axiom.json.new
-        mv $AXIOM_PATH/axiom.json.new $AXIOM_PATH/axiom.json
+		if [ "$provider" = "gcp" ]; then
+			zones=$(gcloud compute zones list | grep $2 | cut -d ' ' -f 1 | sort)
+			echo "$zones" | tr ' ' '\n'
+			default_zone="$(echo $zones | tr ' ' '\n' | head -n 1)"
+			echo -e -n "${Green}Please enter your default zone:  Default '$default_zone', press enter \n>> ${Color_Off}"
+			read zone
+		if [[ "$zone" == "" ]]; then
+			echo -e "${Blue}Selected default option '${default_zone}'${Color_Off}"
+			zone="${default_zone}"
+		fi
+		cat $AXIOM_PATH/axiom.json | jq -r ".physical_region=\"$2\"" | jq -r ".region=\"$zone\"" |jq -r > $AXIOM_PATH/axiom.json.new
+		fi
+
+	mv $AXIOM_PATH/axiom.json.new $account_path
 	fi
 else
 	echo "Usage:"

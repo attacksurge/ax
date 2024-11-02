@@ -32,7 +32,6 @@ create_instance() {
 delete_instances() {
     names="$1"
     force="$2"
-    resource_group="axiom"  # Update with the correct resource group
 
     # Convert names to an array for processing
     name_array=($names)
@@ -58,7 +57,7 @@ delete_instances() {
 
     # Force deletion: Delete all resources without prompting
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting Azure resources: ${names}...${Color_Off}"
+        echo -e "${Red}Deleting instances: ${names}...${Color_Off}"
         az resource delete --ids $resource_ids_string --no-wait >/dev/null 2>&1
 
         # Clean up leftover resources associated with the deleted names in a single step
