@@ -21,28 +21,47 @@ create_instance() {
 }
 
 ###################################################################
-# Deletes an instance, if the second argument is set to "true", will not prompt
+# Deletes instances, if the second argument is set to "true", will not prompt
 # Used by axiom-rm
-delete_instance() {
-    name="$1"
+delete_instances() {
+    names="$1"
     force="$2"
 
     data=$(instances)
-    instance_id=$(echo $data | jq -r '.[] | select(.name=="'$name'") | .id')
-    ip=$(echo $data | jq -r '.[] | select(.name=="'$name'") | .public_ip.address')
 
     if [ "$force" == "true" ]; then
-        echo -e "${Red}...powering off and deleting $name...${Color_Off}"
-        scw instance server delete "$instance_id" force-shutdown=true
-        scw instance ip delete "$ip"
+        instance_ids=""
+        ips=""
+
+        for name in $names; do
+            # Collect all matching instance IDs and IPs
+            instance_ids_list=$(echo "$data" | jq -r '.[] | select(.name=="'$name'") | .id')
+            for instance_id in $instance_ids_list; do
+                instance_ids+="$instance_id "
+                ip=$(echo "$data" | jq -r '.[] | select(.id=="'$instance_id'") | .public_ip.address')
+                ips+="$ip "
+            done
+        done
+
+        echo -e "${Red}Powering off and deleting instances: $names...please be patient${Color_Off}"
+        scw instance server delete $instance_ids force-shutdown=true
+        scw instance ip delete $ips
     else
-       echo -e -n "Are you sure you want to delete $name (y/N) - default NO: "
-       read ans
-       if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-        echo -e "${Red}...powering off and deleting $name...${Color_Off}"
-        scw instance server delete "$instance_id" force-shutdown=true
-        scw instance ip delete "$ip"
-       fi
+        for name in $names; do
+            # Prompt user for each matching instance
+            instance_ids_list=$(echo "$data" | jq -r '.[] | select(.name=="'$name'") | .id')
+            for instance_id in $instance_ids_list; do
+                ip=$(echo "$data" | jq -r '.[] | select(.id=="'$instance_id'") | .public_ip.address')
+
+                echo -e -n "Are you sure you want to delete $name (Instance ID: $instance_id) (y/N) - default NO: "
+                read ans
+                if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
+                    echo -e "${Red}Powering off and deleting $name (Instance ID: $instance_id)...please be patient${Color_Off}"
+                    scw instance server delete "$instance_id" force-shutdown=true
+                    scw instance ip delete "$ip"
+                fi
+            done
+        done
     fi
 }
 

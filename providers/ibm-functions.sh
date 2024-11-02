@@ -20,18 +20,46 @@ create_instance() {
 }
 
 ###################################################################
-# deletes instance, if the second argument is set to "true", will not prompt
+# deletes instances, if the second argument is set to "true", will not prompt
 # used by axiom-rm
 #
-delete_instance() {
-    name="$1"
+delete_instances() {
+    names="$1"
     force="$2"
-    id="$(instance_id $name)"
-    if [ "$force" == "true" ]
-        then
-        ibmcloud sl vs cancel "$id" -f >/dev/null 2>&1
+
+    # Declare an array to store instance IDs
+    instance_ids=()
+
+    # Get the instance IDs for the given names
+    ibmcloud_cli_output=$(ibmcloud sl vs list --output JSON)
+    for name in $names; do
+        ids=$(echo "$ibmcloud_cli_output" | jq -r ".[] | select(.hostname==\"$name\") | .id")
+        if [ -n "$ids" ]; then
+            for id in $ids; do
+                instance_ids+=("$id")
+            done
+        else
+            echo -e "${BRed}Error: No IBM Cloud instance found with the given name: '$name'.${BRed}"
+        fi
+    done
+
+    if [ "$force" == "true" ]; then
+        echo -e "${Red}Deleting IBM Cloud instances $names (IDs: ${instance_ids[@]})...${Color_Off}"
+        for id in "${instance_ids[@]}"; do
+            ibmcloud sl vs cancel "$id" -f
+        done
     else
-        ibmcloud sl vs cancel "$id"
+        for id in "${instance_ids[@]}"; do
+            instance_name=$(echo "$ibmcloud_cli_output" | jq -r ".[] | select(.id==$id) | .hostname")
+            read -p "Are you sure you want to delete instance '$instance_name' (ID: $id)? (y/N): " confirm
+            if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+                echo "Instance deletion aborted for instance '$instance_name' (ID: $id)."
+                continue
+            fi
+
+            echo -e "${Red}Deleting IBM Cloud instance '$instance_name' (ID: $id)...${Color_Off}"
+            ibmcloud sl vs cancel "$id" -f
+        done
     fi
 }
 

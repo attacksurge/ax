@@ -26,37 +26,96 @@ create_instance() {
 }
 
 ###################################################################
-# deletes instance, if the second argument is set to "true", will not prompt
+# deletes instances by name, if the second argument is set to "true", will not prompt
 # used by axiom-rm
 #
-delete_instance() {
-    name="$1"
+delete_instances() {
+    names="$1"
     force="$2"
+    resource_group="axiom"  # Update with the correct resource group
 
+    # Convert names to an array for processing
+    name_array=($names)
+
+    # Make a single Azure CLI call to get all resources in the resource group
+    all_resources=$(az resource list --resource-group "$resource_group" --query "[].[id, name]" -o tsv)
+
+    # Declare an array to store all resource IDs to be deleted
+    all_resource_ids=()
+    deleted_names=()
+
+    # Iterate over all resources and filter by the provided names
+    while IFS=$'\t' read -r resource_id resource_name; do
+        for name in "${name_array[@]}"; do
+            if [[ "$resource_name" == *"$name"* ]]; then
+                all_resource_ids+=("$resource_id")
+            fi
+        done
+    done <<< "$all_resources"
+
+    # Convert all resource IDs to a space-separated list for deletion
+    resource_ids_string="${all_resource_ids[@]}"
+
+    # Force deletion: Delete all resources without prompting
     if [ "$force" == "true" ]; then
-                # Does not delete all of the related resources like other platforms.
-               # az vm delete --name "$name" --resource-group $resource_group --yes --debug
-                # recommeded to delete resources by tags instead
-                az resource delete --ids $(az resource list --tag "$name"=True -otable --query "[].id" -otsv) >/dev/null 2>&1
+        echo -e "${Red}Deleting Azure resources: ${names}...${Color_Off}"
+        az resource delete --ids $resource_ids_string --no-wait >/dev/null 2>&1
 
-                # when deleting a fleet, there is a virtual network left over from the first VM becuse it's used by the others
-                # need to figure out how to delete it...
-                # It actually left over a public-ip, network security group and the virutal network, and here is the way to do it
-                az resource delete --ids $(az network public-ip list --query '[?ipAddress==`null`].[id]' -otsv | grep $name) >/dev/null 2>&1
-                az resource delete --ids $(az network nsg list --query "[?(subnets==null) && (networkInterfaces==null)].id" -o tsv | grep $name) >/dev/null 2>&1
-                az resource delete --ids $(az network nic list --query '[?virtualMachine==`null` && privateEndpoint==`null`].[id]' -o tsv | grep $name) >/dev/null 2>&1
-    
+        # Clean up leftover resources associated with the deleted names in a single step
+        public_ip_ids=$(az network public-ip list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${name_array[*]}")')].id" -o tsv)
+        nsg_ids=$(az network nsg list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${name_array[*]}")')].id" -o tsv)
+        nic_ids=$(az network nic list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${name_array[*]}")')].id" -o tsv)
+
+        # Delete the related resources
+        az resource delete --ids $public_ip_ids --no-wait >/dev/null 2>&1
+        az resource delete --ids $nsg_ids --no-wait >/dev/null 2>&1
+        az resource delete --ids $nic_ids --no-wait >/dev/null 2>&1
+
+    # Prompt for each instance if force is not true
     else
-        # az vm delete --name "$name" --resource-group $resource_group
-                echo -e -n "  Are you sure you want to delete $name (y/N) - default NO: "
+        # Collect VMs for deletion after user confirmation
+        confirmed_resource_ids=()
+        confirmed_names=()
+
+        for name in "${name_array[@]}"; do
+            matching_resource_ids=()
+            for resource_id in "${all_resource_ids[@]}"; do
+                if [[ "$resource_id" == *"$name"* ]]; then
+                    matching_resource_ids+=("$resource_id")
+                fi
+            done
+
+            if [ ${#matching_resource_ids[@]} -gt 0 ]; then
+                echo -e -n "Are you sure you want to delete $name (y/N) - default NO: "
                 read ans
                 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-                        echo -e "${Red}...deleting $name...${Color_Off}"
-                        az resource delete --ids $(az resource list --tag "$name"=True -otable --query "[].id" -otsv) >/dev/null 2>&1
+                    confirmed_resource_ids+=("${matching_resource_ids[@]}")
+                    confirmed_names+=("$name")
+                else
+                    echo "Deletion aborted for $name."
                 fi
+            else
+                echo -e "${BRed}Warning: No resources found for the name '$name'.${Color_Off}"
+            fi
+        done
+
+        # Delete confirmed VMs
+        if [ ${#confirmed_resource_ids[@]} -gt 0 ]; then
+            echo -e "${Red}Deleting Azure VMs ${confirmed_names[@]}...${Color_Off}"
+            az resource delete --ids "${confirmed_resource_ids[@]}" --no-wait >/dev/null 2>&1
+
+            # Clean up leftover resources for the deleted VMs in a single step
+            public_ip_ids=$(az network public-ip list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${confirmed_names[*]}")')].id" -o tsv)
+            nsg_ids=$(az network nsg list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${confirmed_names[*]}")')].id" -o tsv)
+            nic_ids=$(az network nic list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${confirmed_names[*]}")')].id" -o tsv)
+
+            # Delete the related resources
+            az resource delete --ids $public_ip_ids --no-wait >/dev/null 2>&1
+            az resource delete --ids $nsg_ids --no-wait >/dev/null 2>&1
+            az resource delete --ids $nic_ids --no-wait >/dev/null 2>&1
+        fi
     fi
 }
-
 
 ###################################################################
 # Instances functions

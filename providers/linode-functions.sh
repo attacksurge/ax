@@ -13,28 +13,46 @@ create_instance() {
         region="$4"
         boot_script="$5"
         root_pass="$(jq -r .linode_key "$AXIOM_PATH/axiom.json")"
-        linode-cli linodes create  --type "$size_slug" --region "$region" --image "$image_id" --label "$name" --root_pass "$root_pass" --private_ip true 2>&1 >> /dev/null
+        linode-cli linodes create  --type "$size_slug" --region "$region" --image "$image_id" --label "$name" --root_pass "$root_pass" --private_ip true 2>&1 --no-defaults >> /dev/null
         sleep 260
 }
 
 ###################################################################
-# deletes instance, if the second argument is set to "true", will not prompt
+# deletes instances, if the second argument is set to "true", will not prompt
 # used by axiom-rm
 #
-delete_instance() {
-    name="$1"
+delete_instances() {
+    names="$1"
     force="$2"
-    id="$(instance_id "$name")"
-    
-    if [ "$force" != "true" ]; then
-        read -p "Are you sure you want to delete instance '$name'? (y/N): " confirm
-        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-            echo "Instance deletion aborted."
-            return 1
-        fi
-    fi
 
-    linode-cli linodes delete "$id"
+    declare -A linode_ids
+
+    # create array with instance ids
+    linode_cli_output=$(linode-cli linodes list --format "id,label" --no-headers --text)
+    for name in $names; do
+        id=$(echo "$linode_cli_output" | awk -v name="$name" '$2 == name {print $1}')
+        if [ -n "$id" ]; then
+            linode_ids["$name"]="$id"
+        else
+            echo -e "${BRed}Error: No Linode found with the given name: '$name'.${BRed}"
+        fi
+    done
+
+    # iterate over names and delete instances
+    for name in "${!linode_ids[@]}"; do
+        id="${linode_ids[$name]}"
+
+        if [ "$force" != "true" ]; then
+            read -p "Are you sure you want to delete instance '$name' (Linode ID: $id)? (y/N): " confirm
+            if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+                echo "Instance deletion aborted for '$name'."
+                continue
+            fi
+        fi
+
+        echo -e "${Red}Deleting Linode '$name' (Linode ID: $id)...${Color_Off}"
+        linode-cli linodes delete "$id"
+    done
 }
 
 ###################################################################

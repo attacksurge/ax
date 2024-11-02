@@ -14,7 +14,6 @@ fi
 
 force="false"
 query=""
-droplets="$(instances)"
 selected=""
 
 for var in "$@"; do
@@ -29,12 +28,8 @@ selected=$(query_instances $query)
 
 if [[ "$selected" ]]
 then
-	for instance in $selected
-	do
-	    echo -e "${Red}Deleting '$instance'...${Color_Off}"
-		delete_instance "$instance" "$force"
-	done
+delete_instances "$selected" "$force"
 else
         >&2 echo -e "$output ${Color_Off}"
-	exit
+       exit
 fi

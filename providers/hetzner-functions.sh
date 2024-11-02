@@ -49,24 +49,71 @@ create_instance() {
 }
 
 ###################################################################
-# deletes instance, if the second argument is set to "true", will not prompt
+# deletes instances by name, if the second argument is set to "true", will not prompt
 # used by axiom-rm
 #
-delete_instance() {
-    name="$1"
+delete_instances() {
+    names="$1"
     force="$2"
-    id="$(instance_id "$name")"
 
-    if [ "$force" != "true" ]; then
-        read -p "Are you sure you want to delete instance '$name'? (y/N): " confirm
-        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-            echo "Instance deletion aborted."
-            return 1
+    # Convert names to an array for processing
+    name_array=($names)
+
+    # Make a single call to get all Hetzner instances
+    all_instances=$(instances)
+
+    # Declare arrays to store server names and IDs for deletion
+    all_instance_ids=()
+    all_instance_names=()
+
+    # Iterate over all instances and filter by the provided names
+    for name in "${name_array[@]}"; do
+        instance_info=$(echo "$all_instances" | jq -r --arg name "$name" '.[] | select(.name | test($name))')
+
+        if [ -n "$instance_info" ]; then
+            instance_id=$(echo "$instance_info" | jq -r '.id')
+            instance_name=$(echo "$instance_info" | jq -r '.name')
+
+            all_instance_ids+=("$instance_id")
+            all_instance_names+=("$instance_name")
+        else
+            echo -e "${BRed}Warning: No Hetzner Cloud instance found for the name '$name'.${Color_Off}"
+        fi
+    done
+
+    # Force deletion: Delete all instances without prompting
+    if [ "$force" == "true" ]; then
+        echo -e "${Red}Deleting Hetzner Cloud instances: ${all_instance_names[@]}...${Color_Off}"
+        hcloud server delete "${all_instance_ids[@]}" --poll-interval 30s --quiet &
+
+    # Prompt for each instance if force is not true
+    else
+        # Collect instances for deletion after user confirmation
+        confirmed_instance_ids=()
+        confirmed_instance_names=()
+
+        for i in "${!all_instance_names[@]}"; do
+            instance_name="${all_instance_names[$i]}"
+            instance_id="${all_instance_ids[$i]}"
+
+            echo -e -n "Are you sure you want to delete $instance_name (y/N) - default NO: "
+            read ans
+            if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
+                confirmed_instance_ids+=("$instance_id")
+                confirmed_instance_names+=("$instance_name")
+            else
+                echo "Deletion aborted for $instance_name."
+            fi
+        done
+
+        # Delete confirmed instances in bulk
+        if [ ${#confirmed_instance_ids[@]} -gt 0 ]; then
+            echo -e "${Red}Deleting Hetzner Cloud instances ${confirmed_instance_names[@]}...${Color_Off}"
+            hcloud server delete "${confirmed_instance_ids[@]}" --poll-interval 30s --quiet &
+        else
+            echo -e "${BRed}No instances were confirmed for deletion.${Color_Off}"
         fi
     fi
-
-    hcloud server delete "$id" --poll-interval 30s --quiet &
-    sleep 4
 }
 
 ###################################################################

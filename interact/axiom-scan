@@ -1469,14 +1469,9 @@ fi
 #  The instance is deleted after the results are downloaded and the instance is finished with its job
 #
 if [[ "$rm_when_done" == "true" ]]; then
-    for instance in $(cat "$tmp/status/downloader_hosts");
-    do
-     if (( $(instance_ip_cache "$instance" | wc -l) > 0 )); then
-        "$AXIOM_PATH/interact/axiom-rm" "$instance" -f 2>/dev/null
-        sleep 5
-     fi
-    done
- preflight_function >> /dev/null 2>&1
+  "$AXIOM_PATH/interact/axiom-rm" $(cat "$tmp/status/downloader_hosts") -f 2>/dev/null
+   sleep 5
+   preflight_function >> /dev/null 2>&1
 fi
 
 # make sure the list of hostnames files downloaded was the same list you started with

@@ -21,22 +21,62 @@ create_instance() {
 }
 
 ###################################################################
-# deletes instance, if the second argument is set to "true", will not prompt
+# deletes instances by name, if the second argument is set to "true", will not prompt
 # used by axiom-rm
 #
-delete_instance() {
-    name="$1"
-    id="$(instance_id "$name")"
+delete_instances() {
+    names="$1"
+    force="$2"
+    instance_ids=()
+    instance_names=()
 
-    if [ "$force" != "true" ]; then
-        read -p "Are you sure you want to delete instance '$name'? (y/N): " confirm
-        if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-            echo "Instance deletion aborted."
-            return 1
+    # Convert names to an array for processing
+    name_array=($names)
+
+    # Make a single AWS CLI call to get all instances and filter by provided names
+    all_instances=$(aws ec2 describe-instances --query "Reservations[*].Instances[*].[InstanceId, Tags[?Key=='Name'].Value | [0]]" --output text)
+
+    # Iterate over the AWS CLI output and filter by the provided names
+    while read -r instance_id instance_name; do
+        for name in "${name_array[@]}"; do
+            if [[ "$instance_name" == "$name" ]]; then
+                instance_ids+=("$instance_id")
+                instance_names+=("$instance_name")
+            fi
+        done
+    done <<< "$all_instances"
+
+    # Force deletion: Delete all instances without prompting
+    if [ "$force" == "true" ]; then
+        echo -e "${Red}Deleting AWS instances: ${instance_names[@]}...${Color_Off}"
+        aws ec2 terminate-instances --instance-ids "${instance_ids[@]}" >/dev/null 2>&1
+
+    # Prompt for each instance if force is not true
+    else
+        # Collect instances for deletion after user confirmation
+        confirmed_instance_ids=()
+        confirmed_instance_names=()
+
+        for i in "${!instance_ids[@]}"; do
+            instance_id="${instance_ids[$i]}"
+            instance_name="${instance_names[$i]}"
+
+            echo -e -n "Are you sure you want to delete instance '$instance_name' (ID: $instance_id) (y/N) - default NO: "
+            read ans
+            if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
+                confirmed_instance_ids+=("$instance_id")
+                confirmed_instance_names+=("$instance_name")
+            else
+                echo "Deletion aborted for instance '$instance_name' (ID: $instance_id)."
+            fi
+        done
+
+        # Delete confirmed instances in bulk
+        if [ ${#confirmed_instance_ids[@]} -gt 0 ]; then
+            echo -e "${Red}Deleting AWS instances: ${confirmed_instance_names[@]}...${Color_Off}"
+            aws ec2 terminate-instances --instance-ids "${confirmed_instance_ids[@]}" >/dev/null 2>&1
         fi
     fi
-
-    aws ec2 terminate-instances --instance-ids "$id" 2>&1 >> /dev/null
 }
 
 ###################################################################
