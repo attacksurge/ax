@@ -4,7 +4,6 @@ AXIOM_PATH="$HOME/.axiom"
 resource_group="$(jq -r '.resource_group' "$AXIOM_PATH"/axiom.json)"
 subscription_id="$(jq -r '.subscription_id' "$AXIOM_PATH"/axiom.json)"
 
-
 ###################################################################
 #  Create Instance is likely the most important provider function :)
 #  needed for init and fleet
@@ -26,96 +25,35 @@ create_instance() {
 }
 
 ###################################################################
-# deletes instances by name, if the second argument is set to "true", will not prompt
+# deletes instance, if the second argument is set to "true", will not prompt
 # used by axiom-rm
 #
-delete_instances() {
-    names="$1"
+delete_instance() {
+    name="$1"
     force="$2"
 
-    # Convert names to an array for processing
-    name_array=($names)
-
-    # Make a single Azure CLI call to get all resources in the resource group
-    all_resources=$(az resource list --resource-group "$resource_group" --query "[].[id, name]" -o tsv)
-
-    # Declare an array to store all resource IDs to be deleted
-    all_resource_ids=()
-    deleted_names=()
-
-    # Iterate over all resources and filter by the provided names
-    while IFS=$'\t' read -r resource_id resource_name; do
-        for name in "${name_array[@]}"; do
-            if [[ "$resource_name" == *"$name"* ]]; then
-                all_resource_ids+=("$resource_id")
-            fi
-        done
-    done <<< "$all_resources"
-
-    # Convert all resource IDs to a space-separated list for deletion
-    resource_ids_string="${all_resource_ids[@]}"
-
-    # Force deletion: Delete all resources without prompting
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting: ${names}...${Color_Off}"
-        az resource delete --ids $resource_ids_string --no-wait >/dev/null 2>&1 &
+                # Does not delete all of the related resources like other platforms.
+               # az vm delete --name "$name" --resource-group $resource_group --yes --debug
+                # recommeded to delete resources by tags instead
+                az resource delete --ids $(az resource list --tag "$name"=True -otable --query "[].id" -otsv) >/dev/null 2>&1
 
-        # Clean up leftover resources associated with the deleted names in a single step
-        public_ip_ids=$(az network public-ip list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${name_array[*]}")')].id" -o tsv)
-        nsg_ids=$(az network nsg list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${name_array[*]}")')].id" -o tsv)
-        nic_ids=$(az network nic list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${name_array[*]}")')].id" -o tsv)
+                # when deleting a fleet, there is a virtual network left over from the first VM becuse it's used by the others
+                # need to figure out how to delete it...
+                # It actually left over a public-ip, network security group and the virutal network, and here is the way to do it
+                az resource delete --ids $(az network public-ip list --query '[?ipAddress==`null`].[id]' -otsv | grep $name) >/dev/null 2>&1
+                az resource delete --ids $(az network nsg list --query "[?(subnets==null) && (networkInterfaces==null)].id" -o tsv | grep $name) >/dev/null 2>&1
+                az resource delete --ids $(az network nic list --query '[?virtualMachine==`null` && privateEndpoint==`null`].[id]' -o tsv | grep $name) >/dev/null 2>&1
 
-        # Delete the related resources
-        az resource delete --ids $public_ip_ids --no-wait >/dev/null 2>&1 &
-        az resource delete --ids $nsg_ids --no-wait >/dev/null 2>&1 &
-        az resource delete --ids $nic_ids --no-wait >/dev/null 2>&1 &
-
-    # Prompt for each instance if force is not true
     else
-        # Collect VMs for deletion after user confirmation
-        confirmed_resource_ids=()
-        confirmed_names=()
-
-        for name in "${name_array[@]}"; do
-            matching_resource_ids=()
-            for resource_id in "${all_resource_ids[@]}"; do
-                if [[ "$resource_id" == *"$name"* ]]; then
-                    matching_resource_ids+=("$resource_id")
-                fi
-            done
-
-            if [ ${#matching_resource_ids[@]} -gt 0 ]; then
+        # az vm delete --name "$name" --resource-group $resource_group
                 echo -e -n "Are you sure you want to delete $name (y/N) - default NO: "
                 read ans
                 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-                    confirmed_resource_ids+=("${matching_resource_ids[@]}")
-                    confirmed_names+=("$name")
-                else
-                    echo "Deletion aborted for $name."
+                        echo -e "${Red}...deleting $name...${Color_Off}"
+                        az resource delete --ids $(az resource list --tag "$name"=True -otable --query "[].id" -otsv) >/dev/null 2>&1
                 fi
-            else
-                echo -e "${BRed}Warning: No resources found for the name '$name'.${Color_Off}"
-            fi
-        done
-
-        # Delete confirmed VMs
-        if [ ${#confirmed_resource_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting: ${confirmed_names[@]}...${Color_Off}"
-            az resource delete --ids "${confirmed_resource_ids[@]}" --no-wait >/dev/null 2>&1 &
-
-            # Clean up leftover resources for the deleted VMs in a single step
-            public_ip_ids=$(az network public-ip list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${confirmed_names[*]}")')].id" -o tsv)
-            nsg_ids=$(az network nsg list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${confirmed_names[*]}")')].id" -o tsv)
-            nic_ids=$(az network nic list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${confirmed_names[*]}")')].id" -o tsv)
-
-            # Delete the related resources
-            az resource delete --ids $public_ip_ids --no-wait >/dev/null 2>&1 &
-            az resource delete --ids $nsg_ids --no-wait >/dev/null 2>&1 &
-            az resource delete --ids $nic_ids --no-wait >/dev/null 2>&1 &
-        fi
     fi
-# wait until all background jobs are finished deleting
-wait
 }
 
 ###################################################################
@@ -313,4 +251,67 @@ region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
 # Format the output with correct column alignment
 awk -F'\t' '{printf "%-20s %-10s %-10s\n", $1, $2, $3}'
 
+}
+
+###################################################################
+# experimental v2 function
+# deletes multiple instances at the same time by name, if the second argument is set to "true", will not prompt
+# used by axiom-rm --multi
+#
+delete_instances() {
+    names="$1"
+    force="$2"
+    name_array=($names)
+    tag_query=""
+
+    # Create a tag query for Azure CLI
+    for name in "${name_array[@]}"; do
+        if [ -n "$tag_query" ]; then
+            tag_query+=" || "
+        fi
+        tag_query+="tags.$name == 'True'"
+    done
+
+    # Retrieve all resources associated with the instances in one Azure CLI call
+    all_resource_ids=$(az resource list --query "[?${tag_query}].id" -o tsv)
+
+    if [ -z "$all_resource_ids" ]; then
+        echo "No resources found for the given instance names."
+        return 1
+    fi
+
+    # Force delete case
+    if [ "$force" == "true" ]; then
+        confirmed_resource_ids="$all_resource_ids"
+    else
+        # Non-force delete case: prompt user for each instance
+        confirmed_names=()
+        confirmed_resource_ids=""
+
+        for name in "${name_array[@]}"; do
+            echo -e -n "Are you sure you want to delete all resources associated with instance '$name'? (y/N) - default NO: "
+            read -r ans
+            if [[ "$ans" == "y" || "$ans" == "Y" ]]; then
+                confirmed_names+=("$name")
+                # Append resource IDs related to this instance to the list
+                for resource_id in $all_resource_ids; do
+                    if [[ "$resource_id" == *"$name"* ]]; then
+                        confirmed_resource_ids+="$resource_id "
+                    fi
+                done
+            fi
+        done
+    fi
+
+    # Delete confirmed resources
+    if [ -n "$confirmed_resource_ids" ]; then
+        if [ "$force" == "true" ]; then
+            echo -e "${Red}Deleting: ${name_array[*]}${Color_Off}"
+        else
+            echo -e "${Red}Deleting: ${confirmed_names[*]}${Color_Off}"
+        fi
+        az resource delete --ids $confirmed_resource_ids --no-wait
+    else
+        echo "No resources were selected for deletion."
+    fi
 }

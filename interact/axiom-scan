@@ -1465,45 +1465,19 @@ if [[ "$shutdown_when_done" == "true" ]]; then
  preflight_function >> /dev/null 2>&1
 fi
 
-# If --rm-when-done is in the command, delete the instance as soon as ax sees the instance's $(hostname) file
-# This doesn't wait until all scanners are finished before deleting the instance
-# The instance is deleted after the results are downloaded and the instance is finished with its job
+#  If --rm-when-done is in the command, delete the instance as soon as ax see the instances $(hostname) file
+#  This doesnt wait until all scanners are finished before deleting the instance
+#  The instance is deleted after the results are downloaded and the instance is finished with its job
 #
 if [[ "$rm_when_done" == "true" ]]; then
-    # Declare an array to store instances that are ready for deletion
-    instances_to_delete=()
-
-    # Create a file to track deleted instances if it doesn't exist
-    deleted_hosts_file="$tmp/status/deleted_hosts"
-    touch "$deleted_hosts_file"
-
-    # Iterate over each instance that has completed its scan (based on completed files)
-    while IFS= read -r completed_host; do
-        # Skip empty lines
-        if [ -z "$completed_host" ]; then
-            continue
-        fi
-
-        instance=$(basename "$completed_host")
-
-        # Only add instance to deletion list if it hasn't been deleted already
-        if ! grep -qx "$instance" "$deleted_hosts_file"; then
-            instances_to_delete+=("$instance")
-        fi
-    done < "$tmp/status/completed/hosts"
-
-    # If there are instances to delete, delete them in one go
-    if [ ${#instances_to_delete[@]} -gt 0 ]; then
-        "$AXIOM_PATH/interact/axiom-rm" "${instances_to_delete[@]}" -f
-
-        # Add deleted instances to the deleted_hosts file
-        for instance in "${instances_to_delete[@]}"; do
-            echo "$instance" >> "$deleted_hosts_file"
-        done
-    fi
-
-    sleep 5
-    preflight_function >> /dev/null 2>&1
+    for instance in $(cat "$tmp/status/downloader_hosts");
+    do
+     if (( $(instance_ip_cache "$instance" | wc -l) > 0 )); then
+        "$AXIOM_PATH/interact/axiom-rm" "$instance" -f 2>/dev/null
+        sleep 5
+     fi
+    done
+ preflight_function >> /dev/null 2>&1
 fi
 
 # make sure the list of hostnames files downloaded was the same list you started with

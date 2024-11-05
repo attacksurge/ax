@@ -14,20 +14,38 @@ fi
 force="false"
 query=""
 instance_names=""
+multi=false
 
+# Iterate over all passed arguments
 for var in "$@"; do
-	if [ "$var" == "-f" ]; then
-		force=true
-	else
-		query="$query $var"
-	fi
+    case "$var" in
+        -f)
+            force=true
+            ;;
+        --multi)
+            multi=true
+            ;;
+        *)
+            query+="$var "
+            ;;
+    esac
 done
+
+# Trim any trailing spaces from the query variable
+#query=$(echo "$query" | xargs)
 
 instance_names=$(query_instances $query)
 
-if [[ "$instance_names" ]]
-then
-delete_instances "$instance_names" "$force"
+if [[ "$instance_names" ]] ; then
+	if [ "$multi" == "true" ]; then
+		delete_instances "$instance_names" "$force"
+	else
+		for instance in $instance_names
+		do
+	    		echo -e "${Red}Deleting '$instance'...${Color_Off}"
+			delete_instance "$instance" "$force"
+		done
+	fi
 else
         >&2 echo -e "$output ${Color_Off}"
        exit

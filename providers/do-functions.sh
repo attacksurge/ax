@@ -49,68 +49,19 @@ create_instance() {
 }
 
 ###################################################################
-# deletes instances by name, if the second argument is set to "true", will not prompt
+# deletes instance, if the second argument is set to "true", will not prompt
 # used by axiom-rm
 #
-delete_instances() {
-    names="$1"
-    force="$2"
+delete_instance() {
+        name="$1"
+        force="$2"
 
-    # Convert names to an array for processing
-    name_array=($names)
-
-    # Make a single call to get all DigitalOcean droplets
-    all_droplets=$(doctl compute droplet list --format "ID,Name" --no-header)
-
-    # Declare arrays to store droplet IDs and names for deletion
-    all_droplet_ids=()
-    all_droplet_names=()
-
-    # Iterate over all droplets and filter by the provided names
-    for name in "${name_array[@]}"; do
-        matching_droplets=$(echo "$all_droplets" | awk -v name="$name" '$2 == name {print $1, $2}')
-
-        if [ -n "$matching_droplets" ]; then
-            while IFS=' ' read -r droplet_id droplet_name; do
-                all_droplet_ids+=("$droplet_id")
-                all_droplet_names+=("$droplet_name")
-            done <<< "$matching_droplets"
+        if [ "$force" == "true" ]
+        then
+         doctl compute droplet delete -f "$name"
         else
-            echo -e "${BRed}Warning: No DigitalOcean droplet found with the name '$name'.${Color_Off}"
+        doctl compute droplet delete "$name"
         fi
-    done
-
-    # Force deletion: Delete all droplets without prompting
-    if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting: ${all_droplet_names[@]}...${Color_Off}"
-        doctl compute droplet delete -f "${all_droplet_ids[@]}" >/dev/null 2>&1
-
-    # Prompt for each droplet if force is not true
-    else
-        # Collect droplets for deletion after user confirmation
-        confirmed_droplet_ids=()
-        confirmed_droplet_names=()
-
-        for i in "${!all_droplet_ids[@]}"; do
-            droplet_id="${all_droplet_ids[$i]}"
-            droplet_name="${all_droplet_names[$i]}"
-
-            echo -e -n "Are you sure you want to delete Droplet $droplet_name (Droplet ID: $droplet_id) (y/N) - default NO: "
-            read ans
-            if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-                confirmed_droplet_ids+=("$droplet_id")
-                confirmed_droplet_names+=("$droplet_name")
-            else
-                echo "Deletion aborted for $droplet_name."
-            fi
-        done
-
-        # Delete confirmed droplets in bulk
-        if [ ${#confirmed_droplet_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting: ${confirmed_droplet_names[@]}...${Color_Off}"
-            doctl compute droplet delete -f "${confirmed_droplet_ids[@]}"
-        fi
-    fi
 }
 
 ###################################################################
@@ -326,4 +277,70 @@ instance_id() {
 #
 sizes_list() {
    doctl compute size list
+}
+
+###################################################################
+# experimental v2 function
+# deletes multiple instances at the same time by name, if the second argument is set to "true", will not prompt
+# used by axiom-rm --multi
+#
+delete_instances() {
+    names="$1"
+    force="$2"
+
+    # Convert names to an array for processing
+    name_array=($names)
+
+    # Make a single call to get all DigitalOcean droplets
+    all_droplets=$(doctl compute droplet list --format "ID,Name" --no-header)
+
+    # Declare arrays to store droplet IDs and names for deletion
+    all_droplet_ids=()
+    all_droplet_names=()
+
+    # Iterate over all droplets and filter by the provided names
+    for name in "${name_array[@]}"; do
+        matching_droplets=$(echo "$all_droplets" | awk -v name="$name" '$2 == name {print $1, $2}')
+
+        if [ -n "$matching_droplets" ]; then
+            while IFS=' ' read -r droplet_id droplet_name; do
+                all_droplet_ids+=("$droplet_id")
+                all_droplet_names+=("$droplet_name")
+            done <<< "$matching_droplets"
+        else
+            echo -e "${BRed}Warning: No DigitalOcean droplet found with the name '$name'.${Color_Off}"
+        fi
+    done
+
+    # Force deletion: Delete all droplets without prompting
+    if [ "$force" == "true" ]; then
+        echo -e "${Red}Deleting: ${all_droplet_names[@]}...${Color_Off}"
+        doctl compute droplet delete -f "${all_droplet_ids[@]}" >/dev/null 2>&1
+
+    # Prompt for each droplet if force is not true
+    else
+        # Collect droplets for deletion after user confirmation
+        confirmed_droplet_ids=()
+        confirmed_droplet_names=()
+
+        for i in "${!all_droplet_ids[@]}"; do
+            droplet_id="${all_droplet_ids[$i]}"
+            droplet_name="${all_droplet_names[$i]}"
+
+            echo -e -n "Are you sure you want to delete Droplet $droplet_name (Droplet ID: $droplet_id) (y/N) - default NO: "
+            read ans
+            if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
+                confirmed_droplet_ids+=("$droplet_id")
+                confirmed_droplet_names+=("$droplet_name")
+            else
+                echo "Deletion aborted for $droplet_name."
+            fi
+        done
+
+        # Delete confirmed droplets in bulk
+        if [ ${#confirmed_droplet_ids[@]} -gt 0 ]; then
+            echo -e "${Red}Deleting: ${confirmed_droplet_names[@]}...${Color_Off}"
+            doctl compute droplet delete -f "${confirmed_droplet_ids[@]}"
+        fi
+    fi
 }
