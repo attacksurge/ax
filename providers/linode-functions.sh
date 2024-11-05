@@ -50,9 +50,12 @@ delete_instances() {
             fi
         fi
 
-        echo -e "${Red}Deleting instance: '$name' (Linode ID: $id)...${Color_Off}"
-        linode-cli linodes delete "$id"
+        echo -e "${Red}Deleting: '$name' (Linode ID: $id)...${Color_Off}"
+        linode-cli linodes delete "$id" >/dev/null 2>&1 &
     done
+
+# wait until all background jobs are finished deleting
+wait
 }
 
 ###################################################################

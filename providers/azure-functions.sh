@@ -57,8 +57,8 @@ delete_instances() {
 
     # Force deletion: Delete all resources without prompting
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting instances: ${names}...${Color_Off}"
-        az resource delete --ids $resource_ids_string --no-wait >/dev/null 2>&1
+        echo -e "${Red}Deleting: ${names}...${Color_Off}"
+        az resource delete --ids $resource_ids_string --no-wait >/dev/null 2>&1 &
 
         # Clean up leftover resources associated with the deleted names in a single step
         public_ip_ids=$(az network public-ip list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${name_array[*]}")')].id" -o tsv)
@@ -66,9 +66,9 @@ delete_instances() {
         nic_ids=$(az network nic list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${name_array[*]}")')].id" -o tsv)
 
         # Delete the related resources
-        az resource delete --ids $public_ip_ids --no-wait >/dev/null 2>&1
-        az resource delete --ids $nsg_ids --no-wait >/dev/null 2>&1
-        az resource delete --ids $nic_ids --no-wait >/dev/null 2>&1
+        az resource delete --ids $public_ip_ids --no-wait >/dev/null 2>&1 &
+        az resource delete --ids $nsg_ids --no-wait >/dev/null 2>&1 &
+        az resource delete --ids $nic_ids --no-wait >/dev/null 2>&1 &
 
     # Prompt for each instance if force is not true
     else
@@ -100,8 +100,8 @@ delete_instances() {
 
         # Delete confirmed VMs
         if [ ${#confirmed_resource_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting Azure VMs ${confirmed_names[@]}...${Color_Off}"
-            az resource delete --ids "${confirmed_resource_ids[@]}" --no-wait >/dev/null 2>&1
+            echo -e "${Red}Deleting: ${confirmed_names[@]}...${Color_Off}"
+            az resource delete --ids "${confirmed_resource_ids[@]}" --no-wait >/dev/null 2>&1 &
 
             # Clean up leftover resources for the deleted VMs in a single step
             public_ip_ids=$(az network public-ip list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${confirmed_names[*]}")')].id" -o tsv)
@@ -109,11 +109,13 @@ delete_instances() {
             nic_ids=$(az network nic list --resource-group "$resource_group" --query "[?contains(name, '$(IFS="|" ; echo "${confirmed_names[*]}")')].id" -o tsv)
 
             # Delete the related resources
-            az resource delete --ids $public_ip_ids --no-wait >/dev/null 2>&1
-            az resource delete --ids $nsg_ids --no-wait >/dev/null 2>&1
-            az resource delete --ids $nic_ids --no-wait >/dev/null 2>&1
+            az resource delete --ids $public_ip_ids --no-wait >/dev/null 2>&1 &
+            az resource delete --ids $nsg_ids --no-wait >/dev/null 2>&1 &
+            az resource delete --ids $nic_ids --no-wait >/dev/null 2>&1 &
         fi
     fi
+# wait until all background jobs are finished deleting
+wait
 }
 
 ###################################################################

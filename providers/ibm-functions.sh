@@ -44,9 +44,9 @@ delete_instances() {
     done
 
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting instances $names...${Color_Off}"
+        echo -e "${Red}Deleting: $names...${Color_Off}"
         for id in "${instance_ids[@]}"; do
-            ibmcloud sl vs cancel "$id" -f
+            ibmcloud sl vs cancel "$id" -f >/dev/null 2>&1 &
         done
     else
         for id in "${instance_ids[@]}"; do
@@ -57,10 +57,12 @@ delete_instances() {
                 continue
             fi
 
-            echo -e "${Red}Deleting instance '$instance_name' (ID: $id)...${Color_Off}"
-            ibmcloud sl vs cancel "$id" -f
+            echo -e "${Red}Deleting: '$instance_name' (ID: $id)...${Color_Off}"
+            ibmcloud sl vs cancel "$id" -f &
         done
     fi
+# wait until all background jobs are finished deleting
+wait
 }
 
 ###################################################################

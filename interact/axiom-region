@@ -16,22 +16,21 @@ then
 
 	if [ "$lines" -gt 0 ]
 	then
-		echo -e "${BWhite}Selected region $2${Color_Off}"
 		cat $AXIOM_PATH/axiom.json | jq -r ".region=\"$2\"" | jq -r > $AXIOM_PATH/axiom.json.new
 		if [ "$provider" = "gcp" ]; then
-			zones=$(gcloud compute zones list | grep $2 | cut -d ' ' -f 1 | sort)
-			echo "$zones" | tr ' ' '\n'
-			default_zone="$(echo $zones | tr ' ' '\n' | head -n 1)"
-			echo -e -n "${Green}Please enter your default zone:  Default '$default_zone', press enter \n>> ${Color_Off}"
-			read zone
-		if [[ "$zone" == "" ]]; then
-			echo -e "${Blue}Selected default option '${default_zone}'${Color_Off}"
-			zone="${default_zone}"
-		fi
-		cat $AXIOM_PATH/axiom.json | jq -r ".physical_region=\"$2\"" | jq -r ".region=\"$zone\"" |jq -r > $AXIOM_PATH/axiom.json.new
+			physical_region=$(echo $2| rev | cut -d '-' -f2- | rev)
+			availability_zones=$(echo "$region_json" | jq -r '.[].name')
+			# Check if selected availability zone is in the list of valid availability zones
+			if ! echo "$2" | grep -qw "$availability_zones"; then
+				echo -e "${BRed}Error: for GCP you must select an availability zone as a region${Color_Off}"
+				echo -e "${BRed}List all availability zones with ax region ls.. exiting${Color_Off}"
+				exit
+			fi
+			cat $AXIOM_PATH/axiom.json | jq -r ".physical_region=\"$physical_region\"" | jq -r ".region=\"$2\"" |jq -r > $AXIOM_PATH/axiom.json.new
 		fi
 
 	mv $AXIOM_PATH/axiom.json.new $account_path
+	echo -e "${BWhite}Selected region $2${Color_Off}"
 	fi
 else
 	echo "Usage:"

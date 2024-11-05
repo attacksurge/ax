@@ -58,7 +58,7 @@ delete_instances() {
 
     # Force deletion: Delete all instances without prompting
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting instances: ${all_instance_names[@]}...${Color_Off}"
+        echo -e "${Red}Deleting: ${all_instance_names[@]}...${Color_Off}"
         # Delete instances in bulk by zone
         for zone in $(printf "%s\n" "${all_instance_zones[@]}" | sort -u); do
             instances_to_delete=()
@@ -68,7 +68,7 @@ delete_instances() {
                 fi
             done
             if [ ${#instances_to_delete[@]} -gt 0 ]; then
-                gcloud compute instances delete "${instances_to_delete[@]}" --zone="$zone" --quiet
+                gcloud compute instances delete "${instances_to_delete[@]}" --zone="$zone" --quiet >/dev/null 2>&1 &
             fi
         done
 
@@ -94,7 +94,7 @@ delete_instances() {
 
         # Delete confirmed instances in bulk by zone
         if [ ${#confirmed_instance_names[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting instances: ${confirmed_instance_names[@]}...${Color_Off}"
+            echo -e "${Red}Deleting: ${confirmed_instance_names[@]}...${Color_Off}"
             for zone in $(printf "%s\n" "${confirmed_instance_zones[@]}" | sort -u); do
                 instances_to_delete=()
                 for i in "${!confirmed_instance_names[@]}"; do
@@ -103,13 +103,15 @@ delete_instances() {
                     fi
                 done
                 if [ ${#instances_to_delete[@]} -gt 0 ]; then
-                    gcloud compute instances delete "${instances_to_delete[@]}" --zone="$zone" --quiet
+                    gcloud compute instances delete "${instances_to_delete[@]}" --zone="$zone" --quiet &
                 fi
             done
         else
             echo -e "${BRed}No instances were confirmed for deletion.${Color_Off}"
         fi
     fi
+    # wait until all background jobs are finished deleting
+    wait
 }
 
 ###################################################################
@@ -268,11 +270,11 @@ create_snapshot() {
 # Get data about regions
 # Used by axiom-regions
 list_regions() {
-    gcloud compute regions list
+    gcloud compute zones list
 }
 
 regions() {
-    gcloud compute regions list --format=json | jq -r '.[].name'
+    gcloud compute zones list --format=json
 }
 
 ###################################################################

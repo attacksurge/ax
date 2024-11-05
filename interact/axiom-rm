@@ -3,7 +3,6 @@
 AXIOM_PATH="$HOME/.axiom"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 source "$AXIOM_PATH/interact/includes/functions.sh"
-provider="$(jq -r .provider "$AXIOM_PATH/axiom.json")"
 output="${Red}No instance supplied, use '\*' to delete all instances on the account, use -f to force delete and avoid confirmation prompts${Color_Off}" 
 
 if [ -z "$1" ]
@@ -14,7 +13,7 @@ fi
 
 force="false"
 query=""
-selected=""
+instance_names=""
 
 for var in "$@"; do
 	if [ "$var" == "-f" ]; then
@@ -24,12 +23,13 @@ for var in "$@"; do
 	fi
 done
 
-selected=$(query_instances $query)
+instance_names=$(query_instances $query)
 
-if [[ "$selected" ]]
+if [[ "$instance_names" ]]
 then
-delete_instances "$selected" "$force"
+delete_instances "$instance_names" "$force"
 else
         >&2 echo -e "$output ${Color_Off}"
        exit
 fi
+

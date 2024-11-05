@@ -82,8 +82,8 @@ delete_instances() {
 
     # Force deletion: Delete all droplets without prompting
     if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting instances: ${all_droplet_names[@]}...${Color_Off}"
-        doctl compute droplet delete -f "${all_droplet_ids[@]}"
+        echo -e "${Red}Deleting: ${all_droplet_names[@]}...${Color_Off}"
+        doctl compute droplet delete -f "${all_droplet_ids[@]}" >/dev/null 2>&1
 
     # Prompt for each droplet if force is not true
     else
@@ -107,7 +107,7 @@ delete_instances() {
 
         # Delete confirmed droplets in bulk
         if [ ${#confirmed_droplet_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting instances: ${confirmed_droplet_names[@]}...${Color_Off}"
+            echo -e "${Red}Deleting: ${confirmed_droplet_names[@]}...${Color_Off}"
             doctl compute droplet delete -f "${confirmed_droplet_ids[@]}"
         fi
     fi
