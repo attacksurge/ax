@@ -13,7 +13,7 @@ create_instance() {
         region="$4"
         boot_script="$5"
         root_pass="$(jq -r .linode_key "$AXIOM_PATH/axiom.json")"
-        linode-cli linodes create  --type "$size_slug" --region "$region" --image "$image_id" --label "$name" --root_pass "$root_pass" --private_ip true 2>&1 --no-defaults >> /dev/null
+        linode-cli linodes create  --type "$size_slug" --region "$region" --image "$image_id" --label "$name" --root_pass "$root_pass" --private_ip true --no-defaults 2>&1 >> /dev/null
         sleep 260
 }
 
