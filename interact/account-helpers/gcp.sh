@@ -197,6 +197,7 @@ function gcp_setup() {
     # Service Account Key File
     echo -e -n "${Green}Please enter the path to your service account key (required): \n>> ${Color_Off}"
     read service_account_key
+    service_account_key=$(realpath "$service_account_key")
       while [[ ! -f "$service_account_key" ]]; do
       echo -e "${BRed}Please provide a valid service account key file path.${Color_Off}"
       echo -e -n "${Green}Please enter the path to your service account key (required): \n>> ${Color_Off}"

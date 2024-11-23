@@ -3,10 +3,33 @@
 AXIOM_PATH="$HOME/.axiom"
 source "$AXIOM_PATH/interact/includes/vars.sh"
 source "$AXIOM_PATH/interact/includes/functions.sh"
-output="${Red}No instance supplied, use '\*' to delete all instances on the account, use -f to force delete and avoid confirmation prompts${Color_Off}"
+output="${Red}No instance supplied or instance not found. Run 'ax ls' to list all instances or 'ax rm --help' for more options.${Color_Off}"
+
+###########################################################################################################
+# Help Menu
+#
+function usage() {
+        echo -e "${BWhite}Description:${Color_Off}"
+        echo -e "  Delete one or more cloud hosted compute devices"
+        echo -e "  Supports globbing (wildcarding) to match instances based on patterns in their names, such as prefix, suffix, or substring matches."
+        echo -e "${BWhite}Examples:${Color_Off}"
+        echo -e "  ${Green}axiom-rm testy01${Color_Off} # Delete instance named 'testy01'"
+        echo -e "  ${Green}axiom-rm 'testy*'${Color_Off} # Delete all instances starting with 'testy' (you may need to escape the asterisk)"
+        echo -e "  ${Green}axiom-rm '*tess*'${Color_Off} # Delete all instances containing the string 'tess' (you may need to escape the asterisks)"
+        echo -e "  ${Green}axiom-rm '\*' --force --multi${Color_Off} # Delete all instances on the account, avoid confirmation prompts, delete many instances with one API call"
+        echo -e "${BWhite}Usage:${Color_Off}"
+        echo -e "  <name> string (optional)"
+        echo -e "    Name of the instance(s) to delete"
+        echo -e "  -f/--force (optional)"
+        echo -e "    Avoid confirmation prompts"
+        echo -e "  -m/--multi (optional)"
+        echo -e "    Delete multiple instances at once"
+        echo -e "  --help (optional)"
+        echo -e "    Display this help menu"
+}
 
 if [ -z "$1" ]; then
-    echo -e "$output"
+    usage
     exit
 fi
 
@@ -20,7 +43,7 @@ for var in "$@"; do
         -f|--force)
             force=true
             ;;
-        --multi)
+        -m|--multi)
             multi=true
             ;;
         *)

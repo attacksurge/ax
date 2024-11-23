@@ -1,30 +1,6 @@
 #!/bin/bash
+
 AXIOM_PATH="$HOME/.axiom"
-
-###################################################################
-#  Create many instance at a time
-#
-#  Currently not used by Ax framework
-create_instances() {
-	start="$1"
-	end="$2"
-        gen_name="$3"
-        image_id="$4"
-        size_slug="$5"
-        region="$6"
-        sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-        do_key="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.do_key')"
-        sshkey_fingerprint="$(ssh-keygen -l -E md5 -f ~/.ssh/$sshkey.pub | awk '{print $2}' | cut -d : -f 2-)"
-        keyid=$(doctl compute ssh-key import $sshkey \
-         --public-key-file ~/.ssh/$sshkey.pub \
-         --format ID \
-         --no-header 2>/dev/null) ||
-        keyid=$(doctl compute ssh-key list | grep "$sshkey_fingerprint" | awk '{ print $1 }')
-
-       doctl compute droplet create $(for i in $(seq $start $end); do echo $gen_name$i | tr '\n' ' '; done) --image "$image_id" --size "$slug" --region "$region" --enable-ipv6 --ssh-keys "$keyid"
-       sleep 20
-       instances_ready $gen_name $start $end
-}
 
 ###################################################################
 #  Create one instance at a time
@@ -35,15 +11,9 @@ create_instance() {
         image_id="$2"
         size_slug="$3"
         region="$4"
-        sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-        sshkey_fingerprint="$(ssh-keygen -l -E md5 -f ~/.ssh/$sshkey.pub | awk '{print $2}' | cut -d : -f 2-)"
-        keyid=$(doctl compute ssh-key import $sshkey \
-         --public-key-file ~/.ssh/$sshkey.pub \
-         --format ID \
-         --no-header 2>/dev/null) ||
-        keyid=$(doctl compute ssh-key list | grep "$sshkey_fingerprint" | awk '{ print $1 }')
+        user_data="$5"
 
-        doctl compute droplet create "$name" --image "$image_id" --size "$size" --region "$region" --enable-ipv6 --ssh-keys "$keyid" >/dev/null
+        doctl compute droplet create "$name" --image "$image_id" --size "$size" --region "$region" --enable-ipv6 --ssh-keys "$keyid" --user-data "$user_data" >/dev/null
         sleep 260
 }
 

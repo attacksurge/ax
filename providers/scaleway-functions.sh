@@ -11,11 +11,17 @@ create_instance() {
     image_id="$2"
     size_slug="$3"
     region="$4"
+    user_data="$5"
+
+    user_data_file=$(mktemp)
+    echo "$user_data" > "$user_data_file"
+
 
     scw instance server create name="$name" \
         image="$image_id" \
         type="$size_slug" \
         zone="$region" \
+        cloud-init=@"$user_data_file" \
         ip=new >/dev/null
     sleep 260
 }

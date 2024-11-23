@@ -4,20 +4,21 @@ AXIOM_PATH="$HOME/.axiom"
 
 ###################################################################
 #  Create one instance at a time
-#
 #  Needed for axiom-init
+#
 create_instance() {
     name="$1"
     image_id="$2"
     machine_type="$3"
     zone="$4"
-    key="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.service_account_key')"
+    user_data="$5"
 
     gcloud compute instances create "$name" \
         --image "$image_id" \
         --machine-type "$machine_type" \
         --zone "$4" \
         --tags "axiom-ssh" \
+        --metadata=user-data="$user_data" \
         --verbosity=error \
         --quiet 2> >(grep -v '^Created \[' >&2) > /dev/null
         sleep 260

@@ -52,8 +52,6 @@ if [[ "$(printf '%s\n' "$installed_version" "$IBMCloudCliVersion" | sort -V | he
         fi
         echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
         curl -fsSL https://clis.cloud.ibm.com/install/osx | sh
-        echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
-        ibmcloud plugin install sl -q -f
     elif [[ $BASEOS == "Linux" ]]; then
         if uname -a | grep -qi "Microsoft"; then
             OS="UbuntuWSL"
@@ -81,6 +79,9 @@ else
     echo "ibmcloud-cli is already at or above the recommended version $IBMCloudCliVersion."
 fi
 
+# Install IBM Cloud CLI SoftLayer Plugin
+echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
+ibmcloud plugin install sl -q -f
 
 # Install IBM Cloud Packer Plugin
 echo -e "${BGreen}Installing IBM Cloud Packer Builder Plugin${Color_Off}"
@@ -127,7 +128,7 @@ function specs {
     echo -e -n "${BGreen}Please enter your default region (press enter for 'dal13'): \n>> ${Color_Off}"
     read region
     region=${region:-dal13}
-    
+
     echo -e -n "${BGreen}Please enter your default RAM (press enter for '2048'): \n>> ${Color_Off}"
     echo -e -n "${Blue}Options: 2048, 4096, 8192, 16384, 32768, 64512\n>> ${Color_Off}"
     read size

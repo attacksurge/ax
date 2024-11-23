@@ -6,7 +6,7 @@
 # axiom-fleet lets you spin up fleets of axiom instances in one or multiple regions.
 # You can specify the name of a fleet (fleet prefix) or have axiom choose for you.
 #
-# Examples: 
+# Examples:
 #
 # axiom-fleet # Spin up three instances, let axiom decide on the fleet prefix"
 # axiom-fleet javis -i 10 # Spin up 10 instances with a fleet prefix of javis, this will create 10 instances named javis01 to javis10."
@@ -210,6 +210,7 @@ if [ "$sshkey" == "" ] || [ "$sshkey" == "null" ]; then
 echo -e  "${BYellow}WARNING: sshkey not found in ~/.axiom/axiom.json. Adding ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}key as a backup."
 echo -e  "${BYellow}If ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}was not used to build the initial image ${Color_Off}[ ${BBlue}$image_id ${Color_Off}]${BYellow}, you may have to manually edit ~/.axiom/axiom.json to set the correct sshkey${Color_Off}"
 account_path=$(ls -la "$AXIOM_PATH"/axiom.json | rev | cut -d " " -f 1 | rev)
+sshkey=axiom_rsa
  if [ -f ~/.ssh/axiom_rsa ] ; then
   jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
 
@@ -228,6 +229,7 @@ if [[ "$cycle_regions" == "false" ]]; then
 # Chance to cancel initialization of fleet
 #
 echo -e "${BWhite}Initializing new fleet '${BGreen}$gen_name${BWhite}' with '${BGreen}$amount${BWhite}' instances using image '${BGreen}$image${BWhite}' in region '${BGreen}$region${BWhite}'${Color_Off}...${Color_Off}"
+echo -e "${BWhite}Injecting SSH pub key '${BGreen}$HOME/.ssh/$sshkey.pub${Color_Off}${BWhite}' into new fleet"
 echo -e "${BWhite}INITIALIZING IN 5 SECONDS, CTRL+C to quit... ${Color_Off}"
 sleep 5
 
@@ -270,6 +272,7 @@ if [[ "$cycle_regions" != "false" ]]; then
 # Chance to cancel initialization of fleet
 #
 echo -e "${BWhite}Initializing new fleet '${BGreen}$gen_name${BWhite}' with '${BGreen}$amount${BWhite}' instances using image '${BGreen}$image${Color_Off}'...${Color_Off}"
+echo -e "${BWhite}Injecting SSH pub key '${BGreen}$HOME/.ssh/$sshkey.pub${Color_Off}${BWhite}' into new fleet"
 echo -e "${BWhite}Cycling through following regions:${BGreen}$cycle_regions${BWhite}...${Color_Off}"
 echo -e "${BWhite}INITIALIZING IN 5 SECONDS, CTRL+C to quit... ${Color_Off}"
 sleep 5

@@ -11,11 +11,12 @@ create_instance() {
         image_id="$2"
         size_slug="$3"
         region="$4"
-        boot_script="$5"
+        user_data="$5"
         domain="ax.private"
         cpu="$(jq -r '.cpu' $AXIOM_PATH/axiom.json)"
-        #ibmcloud sl vs create -H "$name" -D "$domain" -c 2 -m 2048 -d dal12 --image 6018238 --wait 5000 -f  2>&1 >>/dev/null &
-        ibmcloud sl vs create -H "$name" -D "$domain" -c "$cpu" -m "$size_slug" -n 1000 -d "$region" --image "$image_id" -f  2>&1 >>/dev/null 
+
+        ibmcloud sl vs create -H "$name" -D "$domain" -c "$cpu" -m "$size_slug" -n 1000 -d "$region" --image "$image_id" --userdata "$user_data" -f  2>&1 >>/dev/null
+
 	sleep 260
 }
 
@@ -90,41 +91,49 @@ instance_pretty() {
 #  Used for axiom-exec axiom-fleet axiom-ssh
 #
 generate_sshconfig() {
-	accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
-	current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)> /dev/null 2>&1
-	droplets="$(instances)"
-        sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
-	echo -n "" > $sshnew
-	echo -e "\tServerAliveInterval 60\n" >> $sshnew
-	sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-	echo -e "IdentityFile $HOME/.ssh/$sshkey" >> $sshnew
-	generate_sshconfig="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.generate_sshconfig')"
+    # Get the list of accounts
+    accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
+    current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1) > /dev/null 2>&1
+    droplets="$(instances)"
 
-  if [[ "$generate_sshconfig" == "private" ]]; then
-  echo -e "Warning your SSH config generation toggle is set to 'Private' for account : $(echo $current)."
-  echo -e "axiom will always attempt to SSH into the instances from their private backend network interface. To revert run: axiom-ssh --just-generate"
-  for name in $(echo "$droplets" | jq -r '.[].hostname')
-  do
-  ip=$(echo "$droplets" | jq -r ".[] | select(.hostname==\"$name\") | .primaryBackendIpAddress")
-  echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
-  done
-  mv $sshnew  $AXIOM_PATH/.sshconfig
+    # Temporary SSH config file
+    sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
+    echo -n "" > "$sshnew"
+    echo -e "\tServerAliveInterval 60\n" >> "$sshnew"
 
-	elif [[ "$generate_sshconfig" == "cache" ]]; then
-	echo -e "Warning your SSH config generation toggle is set to 'Cache' for account : $(echo $current)."
-	echo -e "axiom will never attempt to regenerate the SSH config. To revert run: axiom-ssh --just-generate"
-  # If anything but "private" or "cache" is parsed from the generate_sshconfig in account.json, generate public IPs only
-  #
-	else
-  for name in $(echo "$droplets" | jq -r '.[].hostname')
-	do
-	ip=$(echo "$droplets" | jq -r ".[] | select(.hostname==\"$name\") | .primaryIpAddress")
-	echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
-	done
-	mv $sshnew  $AXIOM_PATH/.sshconfig
-fi
+    # Get the SSH key
+    sshkey=$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')
+    echo -e "IdentityFile $HOME/.ssh/$sshkey" >> "$sshnew"
+
+    # Determine SSH config generation type
+    generate_sshconfig=$(cat "$AXIOM_PATH/axiom.json" | jq -r '.generate_sshconfig')
+
+    if [[ "$generate_sshconfig" == "private" ]]; then
+        echo -e "Warning: Your SSH config generation toggle is set to 'Private' for account: $current."
+        echo -e "Axiom will always attempt to SSH into the instances from their private backend network interface."
+        echo -e "To revert, run: axiom-ssh --just-generate"
+
+        # Generate SSH config using private backend IPs
+        for name in $(echo "$droplets" | jq -r '.[].hostname'); do
+            ip=$(echo "$droplets" | jq -r ".[] | select(.hostname==\"$name\") | .primaryBackendIpAddress")
+            echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
+        done
+        mv "$sshnew" "$AXIOM_PATH/.sshconfig"
+
+    elif [[ "$generate_sshconfig" == "cache" ]]; then
+        echo -e "Warning: Your SSH config generation toggle is set to 'Cache' for account: $current."
+        echo -e "Axiom will never attempt to regenerate the SSH config."
+        echo -e "To revert, run: axiom-ssh --just-generate"
+
+    else
+        # Generate SSH config using public IPs
+        for name in $(echo "$droplets" | jq -r '.[].hostname'); do
+            ip=$(echo "$droplets" | jq -r ".[] | select(.hostname==\"$name\") | .primaryIpAddress")
+            echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
+        done
+        mv "$sshnew" "$AXIOM_PATH/.sshconfig"
+    fi
 }
-
 
 ###################################################################
 # takes any number of arguments, each argument should be an instance or a glob, say 'omnom*', returns a sorted list of instances based on query
@@ -184,7 +193,7 @@ get_snapshots() {
 # axiom-images
 delete_snapshot() {
  name=$1
- image_id=$(get_image_id "$name")       
+ image_id=$(get_image_id "$name")
  ibmcloud sl image delete "$image_id"
 }
 
@@ -221,9 +230,9 @@ instance_name="$1"
 force="$2"
 if [ "$force" == "true" ]
 then
-ibmcloud sl vs power-on $(instance_id $instance_name) --force
+ ibmcloud sl vs power-on $(instance_id $instance_name) --force
 else
-ibmcloud sl vs power-on $(instance_id $instance_name)
+ ibmcloud sl vs power-on $(instance_id $instance_name)
 fi
 }
 
@@ -233,9 +242,9 @@ instance_name="$1"
 force="$2"
 if [ "$force" == "true" ]
 then
-ibmcloud sl vs power-off $(instance_id $instance_name) --force
+ ibmcloud sl vs power-off $(instance_id $instance_name) --force
 else
-ibmcloud sl vs power-off $(instance_id $instance_name) 
+ ibmcloud sl vs power-off $(instance_id $instance_name)
 fi
 }
 
@@ -245,16 +254,16 @@ instance_name="$1"
 force="$2"
 if [ "$force" == "true" ]
 then
-ibmcloud sl vs reboot $(instance_id $instance_name) --force
+ ibmcloud sl vs reboot $(instance_id $instance_name) --force
 else
-ibmcloud sl vs reboot $(instance_id $instance_name) 
+ ibmcloud sl vs reboot $(instance_id $instance_name)
 fi
 }
 
 # axiom-power axiom-images
 instance_id() {
     name="$1"
-	instances | jq ".[] | select(.hostname==\"$name\") | .id"
+    instances | jq ".[] | select(.hostname==\"$name\") | .id"
 }
 
 ###################################################################

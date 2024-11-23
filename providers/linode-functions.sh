@@ -11,9 +11,14 @@ create_instance() {
         image_id="$2"
         size_slug="$3"
         region="$4"
-        boot_script="$5"
-        root_pass="$(jq -r .linode_key "$AXIOM_PATH/axiom.json")"
-        linode-cli linodes create  --type "$size_slug" --region "$region" --image "$image_id" --label "$name" --root_pass "$root_pass" --private_ip true --no-defaults 2>&1 >> /dev/null
+        user_data="$5"
+        root_pass="$(jq -r .op "$AXIOM_PATH/axiom.json")"
+
+        user_data_base64=$(mktemp)
+        echo "$user_data" | base64 | tr -d '\n' > "$user_data_base64"
+
+        linode-cli linodes create  --type "$size_slug" --region "$region" --image "$image_id" --label "$name" --root_pass "$root_pass" \
+         --private_ip true --metadata.user_data "$(cat $user_data_base64)" --no-defaults 2>&1 >> /dev/null
         sleep 260
 }
 

@@ -13,14 +13,11 @@ create_instance() {
 	image_id="$2"
 	size_slug="$3"
 	region="$4"
-	boot_script="$5"
-    sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
+	user_data="$5"
+        sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
 
-	#location="$(az account list-locations | jq -r ".[] | select(.name==\"$region\") | .displayName")"
-	location="$region"
-
-  az vm create --resource-group $resource_group --name "$name" --image "$image_id" --location "$location" --size "$size_slug" --tags "$name"=True --os-disk-delete-option delete --data-disk-delete-option delete --nic-delete-option delete --admin-username op --ssh-key-values ~/.ssh/$sshkey.pub >/dev/null 2>&1
-	az vm open-port --resource-group $resource_group --name "$name" --port 0-65535 >/dev/null 2>&1 
+        az vm create --resource-group $resource_group --name "$name" --image "$image_id" --location "$region" --size "$size_slug" --tags "$name"=True --os-disk-delete-option delete --data-disk-delete-option delete --nic-delete-option delete --admin-username op --ssh-key-values ~/.ssh/$sshkey.pub >/dev/null 2>&1
+	az vm open-port --resource-group $resource_group --name "$name" --port 0-65535 >/dev/null 2>&1
 	sleep 260
 }
 
@@ -33,20 +30,12 @@ delete_instance() {
     force="$2"
 
     if [ "$force" == "true" ]; then
-                # Does not delete all of the related resources like other platforms.
-               # az vm delete --name "$name" --resource-group $resource_group --yes --debug
-                # recommeded to delete resources by tags instead
                 az resource delete --ids $(az resource list --tag "$name"=True -otable --query "[].id" -otsv) >/dev/null 2>&1
-
-                # when deleting a fleet, there is a virtual network left over from the first VM becuse it's used by the others
-                # need to figure out how to delete it...
-                # It actually left over a public-ip, network security group and the virutal network, and here is the way to do it
                 az resource delete --ids $(az network public-ip list --query '[?ipAddress==`null`].[id]' -otsv | grep $name) >/dev/null 2>&1
                 az resource delete --ids $(az network nsg list --query "[?(subnets==null) && (networkInterfaces==null)].id" -o tsv | grep $name) >/dev/null 2>&1
                 az resource delete --ids $(az network nic list --query '[?virtualMachine==`null` && privateEndpoint==`null`].[id]' -o tsv | grep $name) >/dev/null 2>&1
 
     else
-        # az vm delete --name "$name" --resource-group $resource_group
                 echo -e -n "Are you sure you want to delete $name (y/N) - default NO: "
                 read ans
                 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
@@ -111,12 +100,12 @@ generate_sshconfig() {
         sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
         echo -n "" > "$sshnew"
         echo -e "\tServerAliveInterval 60\n" >> $sshnew
-  sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-  echo -e "IdentityFile $HOME/.ssh/$sshkey" >> $sshnew
+        sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
+        echo -e "IdentityFile $HOME/.ssh/$sshkey" >> $sshnew
 
-    
+
         for name in $(echo "$boxes" | jq -r '.[].name')
-        do 
+        do
                 ip=$(echo "$boxes" | jq -r ".[] | select(.name==\"$name\") | .publicIps")
                 echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
 
@@ -188,7 +177,7 @@ get_snapshots() {
 # Delete a snapshot by its name
 # axiom-images
 delete_snapshot() {
-        name="$1"       
+        name="$1"
         az image delete --name "$name" --resource-group $resource_group
 }
 

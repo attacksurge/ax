@@ -7,17 +7,23 @@ AXIOM_PATH="$HOME/.axiom"
 #  needed for init and fleet
 #
 create_instance() {
-	name="$1"
-	image_id="$2"
-	size_slug="$3"
-	region="$4"
-	boot_script="$5"
-	sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-        security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
+    name="$1"
+    image_id="$2"
+    size="$3"
+    region="$4"
+    user_data="$5"
+    security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
 
-	aws ec2 run-instances --image-id "$image_id" --count 1 --instance-type "$size" --region "$region" --security-group-ids "$security_group_id" --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" 2>&1 >> /dev/null
+    aws ec2 run-instances \
+        --image-id "$image_id" \
+        --count 1 \
+        --instance-type "$size" \
+        --region "$region" \
+        --security-group-ids "$security_group_id" \
+        --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" \
+        --user-data "$user_data" 2>&1 >> /dev/null
 
-	sleep 260
+    sleep 260
 }
 
 ###################################################################

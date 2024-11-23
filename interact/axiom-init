@@ -227,6 +227,7 @@ if [ "$sshkey" == "" ] || [ "$sshkey" == "null" ]; then
 echo -e  "${BYellow}WARNING: sshkey not found in ~/.axiom/axiom.json. Adding ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}key as a backup."
 echo -e  "${BYellow}If ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}was not used to build the initial image ${Color_Off}[ ${BBlue}$image_id ${Color_Off}]${BYellow}, you may have to manually edit ~/.axiom/axiom.json to set the correct sshkey${Color_Off}"
 account_path=$(ls -la "$AXIOM_PATH"/axiom.json | rev | cut -d " " -f 1 | rev)
+sshkey=axiom_rsa
  if [ -f ~/.ssh/axiom_rsa ] ; then
   jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
 
@@ -234,6 +235,24 @@ account_path=$(ls -la "$AXIOM_PATH"/axiom.json | rev | cut -d " " -f 1 | rev)
   ssh-keygen -b 2048 -t rsa -f ~/.ssh/axiom_rsa -q -N ""
   jq '.sshkey="'axiom_rsa'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"  >> /dev/null 2>&1
  fi
+fi
+
+###########################################################################################################
+# Create cloud-init user-data to inject ssh pub key
+#
+if [ -f ~/.ssh/$sshkey.pub ] ; then
+public_key_content=$(cat "$HOME/.ssh/$sshkey.pub")
+user_data=$(cat <<EOF
+#cloud-config
+users:
+  - default
+  - name: op
+    ssh-authorized-keys:
+      - $public_key_content
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+EOF
+)
 fi
 
 ###########################################################################################################
@@ -255,7 +274,7 @@ clean_up() {
 if [ $quiet == "true" ]
 then
     trap 'clean_up' SIGINT
-    create_instance "$name" "$image_id" "$size" "$region" &
+    create_instance "$name" "$image_id" "$size" "$region" "$user_data" &
     PID="$!"
     waitabit "$PID"
     sleep 20
@@ -267,7 +286,7 @@ else
 ###########################################################################################################
 # Create instance
 #
-echo -e "${BWhite}Initializing '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$region${Color_Off}${BWhite}' with image '${BGreen}$image${Color_Off}${BWhite}'"
+echo -e "${BWhite}Initializing '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$region${Color_Off}${BWhite}' with image '${BGreen}$image${Color_Off}${BWhite}' also injecting SSH pub key '${BGreen}$HOME/.ssh/$sshkey.pub${Color_Off}${BWhite}'"
 # echo deployment profile when needed
 if [ "$deploy" != false ]; then
     echo -e "${BWhite}Deploying '${BGreen}$deploy${Color_Off}${BWhite}' after init${Color_Off}"
@@ -277,7 +296,7 @@ sleep 5
 region_transfer
 mkdir -p "$AXIOM_PATH/tmp/"
 trap 'clean_up' SIGINT
-create_instance "$name" "$image_id" "$size" "$region" &
+create_instance "$name" "$image_id" "$size" "$region" "$user_data" &
 
 PID="$!"
 "$NOTIFY_CMD" "Axiom Info" "Initializing '$name'..."
