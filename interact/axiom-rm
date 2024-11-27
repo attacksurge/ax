@@ -48,8 +48,7 @@ for var in "$@"; do
             ;;
         *)
             var=$(echo "$var" | sed 's/\\\*/\*/g') # Convert \* to *
-            query="$query '$var'"                 # Single-quote the variable
-#            query="$query $var"
+            query="$query '$var'"
 
             ;;
     esac
