@@ -49,7 +49,6 @@ for var in "$@"; do
         *)
             var=$(echo "$var" | sed 's/\\\*/\*/g') # Convert \* to *
             query="$query '$var'"
-
             ;;
     esac
 done
