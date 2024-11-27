@@ -61,33 +61,32 @@ instance_ip_cache() {
 # check if instances are in .sshconfig
 # used by axiom-scan axiom-exec axiom-scp
 query_instances_cache() {
-    selected=""
     ssh_conf="$AXIOM_PATH/.sshconfig"
+    selected=""
 
     for var in "$@"; do
         if [[ "$var" =~ "-F=" ]]; then
-            ssh_conf="$(echo "$var" | cut -d "=" -f 2)"
-        elif [[ "$var" =~ "*" ]]; then
+            ssh_conf="$(echo "$var" | cut -d '=' -f 2)"
+            continue
+        fi
+
+        if [[ "$var" == "\\*" ]]; then
+            var="*"
+        fi
+
+        if [[ "$var" == *"*"* ]]; then
             var=$(echo "$var" | sed 's/*/.*/g')
-            selected="$selected $(cat "$ssh_conf" | grep "Host " | awk '{ print $2 }' | grep "$var")"
+            matches=$(grep -E "Host " "$ssh_conf" | awk '{ print $2 }' | grep -E "^${var}$")
         else
-            if [[ $query ]]; then
-                query="$query\|$var"
-            else
-                query="$var"
-            fi
+            matches=$(grep -E "Host " "$ssh_conf" | awk '{ print $2 }' | grep -w -E "^${var}$")
+        fi
+
+        if [[ -n "$matches" ]]; then
+            selected="$selected $matches"
         fi
     done
 
-    if [[ "$query" ]]; then
-        selected="$selected $(cat "$ssh_conf" | grep "Host " | awk '{ print $2 }' | grep -w "$query")"
-    else
-        if [[ ! "$selected" ]]; then
-            echo -e "${Red}No instance supplied, use * if you want to delete all instances...${Color_Off}"
-            exit
-        fi
-    fi
-
-    selected=$(echo "$selected" | tr ' ' '\n' | sort -u)
-    echo -n "$selected"
+    selected=$(echo "$selected" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+    echo -n "${selected}" | xargs
 }
+
