@@ -175,7 +175,7 @@ fi # provider linode
 
 # check installed version of ibmcloud cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap
 #
-if [[ "$provider" == "ibm" ]]; then
+if [[ "$provider" == "ibm-classic" ]] || [[ "$provider" == "ibm-vpc" ]] ; then
    installed_version=$(ibmcloud version  2>/dev/null| cut -d ' ' -f 2 | cut -d + -f 1)
    if [[ "$(printf '%s\n' "$installed_version" "$IBMCloudCliVersion" | sort -V | head -n 1)" != "$IBMCloudCliVersion" ]]; then
 
@@ -184,8 +184,13 @@ if [[ "$provider" == "ibm" ]]; then
             # macOS installation/update
             echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
             curl -fsSL https://clis.cloud.ibm.com/install/osx | sh
-            echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
-            ibmcloud plugin install sl -q -f
+	    if [[ $provider == "ibm-classic" ]]; then
+             echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
+             ibmcloud plugin install sl -q -f
+            else
+             echo -e "${BGreen}Installing ibmcloud vpc plugin...${Color_Off}"
+             ibmcloud plugin install vpc-infrastructure -q -f
+           fi
         elif [[ $BASEOS == "Linux" ]]; then
             if uname -a | grep -qi "Microsoft"; then
                 OS="UbuntuWSL"
@@ -203,8 +208,13 @@ if [[ "$provider" == "ibm" ]]; then
                     echo -e "${BGreen}Installing ibmcloud-cli on Linux...${Color_Off}"
                     curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
                 fi
-                echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
-                ibmcloud plugin install sl -q -f
+            if [[ $provider == "ibm-classic" ]]; then
+             echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
+             ibmcloud plugin install sl -q -f
+            else
+             echo -e "${BGreen}Installing ibmcloud vpc plugin...${Color_Off}"
+             ibmcloud plugin install vpc-infrastructure -q -f
+            fi
             elif [[ $OS == "Fedora" ]]; then
                 echo "Needs Conversation for Fedora"
             fi
@@ -218,6 +228,12 @@ if [[ "$provider" == "ibm" ]]; then
     # Validate Token
     token="$(jq -r '.ibm_cloud_api_key' "$AXIOM_PATH"/accounts/"$1".json)"
     ibmcloud login --apikey "$token" --no-region || bootstrap
+    if [[ $provider == "ibm-vpc" ]]; then
+     region="$(jq -r '.physical_region' "$AXIOM_PATH"/accounts/"$1".json)"
+     resource_group="$(jq -r '.resource_group' "$AXIOM_PATH"/accounts/"$1".json)"
+     ibmcloud target -r $region -g $resource_group
+    fi
+
 fi # provider ibm
 
 # check installed version of azure cli and update if needed. check for valid token. If token isnt valid, kick off account bootstrap

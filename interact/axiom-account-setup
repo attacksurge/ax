@@ -5,17 +5,46 @@ source "$AXIOM_PATH/interact/includes/vars.sh"
 
 echo -e "${BWhite}Axiom Account Setup${Color_Off}"
 echo -e "${BGreen}You can use this wizard to add new accounts, once made, use axiom-account to switch between profiles${Color_Off}"
-account_helpers=$(find "$AXIOM_PATH/interact/account-helpers" -name "*.sh"  -execdir basename -s '.sh' {} + | sort)
+
+# Get the list of account helpers, modify ibm-classic and ibm-vpc to ibm
+account_helpers=$(find "$AXIOM_PATH/interact/account-helpers" -name "*.sh" -exec basename -s '.sh' {} + | sed -e 's/ibm-classic/ibm/' -e 's/ibm-vpc/ibm/' | sort -u)
 account_str=$(echo $account_helpers | sed 's/ /, /g')
 echo -e -n "${Green}Please enter your provider ($account_str): \n>> ${Color_Off}"
-read provider
+read -e provider
 provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
 
-while [[ ! -f "$provider_path" ]]; 
-do
-	echo -e -n "${Green}This is not a valid provider, please enter your a valid provider ($account_str): \n>> ${Color_Off}"
-	read provider
-	provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
+# IBM-specific logic: If provider is 'ibm', ask for Classic or VPC choice
+ibm_function() {
+ if [[ "$provider" == "ibm" ]]; then
+    echo -e -n "${Green}Please choose the infrastructure provider:\n1) Classic\n2) VPC\n>> ${Color_Off}"
+    read -e choice
+
+    case $choice in
+        1)
+            provider_path="$AXIOM_PATH/interact/account-helpers/ibm-classic.sh"
+            ;;
+        2)
+            provider_path="$AXIOM_PATH/interact/account-helpers/ibm-vpc.sh"
+            ;;
+        *)
+            echo -e "${Red}Invalid choice. Please choose either 1 for Classic or 2 for VPC.${Color_Off}"
+            exit 1
+            ;;
+    esac
+ fi
+}
+ibm_function
+# For all other providers, check if the provider file exists
+while [[ ! -f "$provider_path" ]]; do
+ echo -e -n "${Green}This is not a valid provider, please enter a valid provider ($account_str): \n>> ${Color_Off}"
+ read -e provider
+ # If the provider is IBM, ask for the infrastructure choice
+ if [[ "$provider" == "ibm" ]]; then
+  ibm_function
+ else
+  provider_path="$AXIOM_PATH/interact/account-helpers/$provider.sh"
+ fi
 done
 
+# Finally, execute the provider's script
 bash "$provider_path"

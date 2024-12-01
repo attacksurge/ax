@@ -328,8 +328,13 @@ elif [[ "$provider" == "do" ]]; then
  jq '.op = "***************************************************************************************************************************"' | \
  jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 
-elif [[ "$provider" == "ibm" ]]; then
+elif [[ "$provider" == "ibm-classic" ]]; then
  cat "$account_path" | jq '.sl_key = "************************************************************************" | .ibm_cloud_api_key = "***************************************"'| \
+ jq '.op = "***************************************************************************************************************************"' |
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
+
+elif [[ "$provider" == "ibm-vpc" ]]; then
+ cat "$account_path" | jq '.ibm_cloud_api_key = "***************************************"'| \
  jq '.op = "***************************************************************************************************************************"' |
  jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.provisioner = "'$provisioner'"'| jq '.sshkey = "'$sshkey'"'
 
@@ -366,9 +371,9 @@ echo -e "Starting Packer Build in 5 seconds... Ctrl+C to quit, remember, you can
 sleep 8
 
 #############################################################################################################
-# Change packer version for IBM
+# Change packer version for IBM Cloud Classic
 #
-if [[ "$provider" == "ibm" ]]; then
+if [[ "$provider" == "ibm-classic" ]]; then
  if [[ "$extension" == "json" ]]; then
   mkdir -p ~/.packer.d/plugins/
   mkdir -p /tmp/packer-ibm/

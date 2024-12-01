@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ip=$(curl -s https://ifconfig.me/)
+ip=$(dig +short myip.opendns.com @resolver1.opendns.com)
 echo ""
 cat << EOF
  █████╗ ██╗  ██╗

@@ -16,7 +16,7 @@ current=$(ls -lh ~/.axiom/axiom.json | awk '{ print $11 }' | tr '/' '\n' | grep 
 provider="$(jq -r ".provider" "$AXIOM_PATH/axiom.json")"
 
 ###################################################################
-#  Validate size for ibm only
+#  Validate size for ibm cloud classic only
 #
 validate_size() {
   local input_size="$1"
@@ -61,8 +61,11 @@ get_default_size() {
   elif [[ "$provider" == "do" ]]; then
     default_size="s-1vcpu-1gb"
 
-  elif [[ "$provider" == "ibm" ]]; then
+  elif [[ "$provider" == "ibm-classic" ]]; then
     default_size="2048,2"
+
+  elif [[ "$provider" == "ibm-vpc" ]]; then
+    default_size="cx2-2x4"
 
   elif [[ "$provider" == "linode" ]]; then
     default_size="g6-standard-1"
@@ -93,7 +96,7 @@ function usage() {
         echo -e "${BWhite}Examples:"
         echo -e "  ${Green}axiom-sizes ls${Color_Off} # List all sizes the cloud provider offers"
         echo -e "  ${Green}axiom-sizes select Standard_F2${Color_Off} # Set a new default instance size to use with future ${Color_Off}'${BGreen}axiom-init/axiom-fleet${Color_Off}'"
-        echo -e "  ${Green}axiom-sizes select 2,8192${Color_Off} # For ibm cloud, supply comma separated ram,cpu or cpu,ram values"
+        echo -e "  ${Green}axiom-sizes select 2,8192${Color_Off} # For ibm cloud classic, supply comma separated ram,cpu or cpu,ram values"
         echo -e "  ${Green}axiom-sizes default${Color_Off} # Restore instance size to the default"
         echo -e "${BWhite}Usage:${Color_Off}"
         echo -e "  ls (optional)"
@@ -196,7 +199,7 @@ elif [[ "$use" == "true" ]]; then
   exit
  fi
 
- if [[ "$provider" == "ibm" ]]; then
+ if [[ "$provider" == "ibm-classic" ]]; then
   if [[ "$new_size" =~ ',' ]]; then
    old="$(cat "$AXIOM_PATH/axiom.json" | jq -r '. | "\(.default_size) \(.cpu)"')"
    input_size="$new_size"
@@ -229,7 +232,7 @@ elif [[ "$use" == "true" ]]; then
 ##
 elif [[ "$restore_default_size" == "true" ]]; then
  get_default_size
- if [[ "$provider" == "ibm" ]]; then
+ if [[ "$provider" == "ibm-classic" ]]; then
   ram="$(echo $default_size | cut -d , -f 1)"
   cpu="$(echo $default_size | cut -d , -f 2)"
   jq '.default_size="'$ram'"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"

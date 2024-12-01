@@ -29,6 +29,19 @@ then
 			cat $AXIOM_PATH/axiom.json | jq -r ".physical_region=\"$physical_region\"" | jq -r ".region=\"$2\"" |jq -r > $AXIOM_PATH/axiom.json.new
 		fi
 
+                if [ "$provider" = "ibm-vpc" ]; then
+                        physical_region=$(echo $2| rev | cut -d '-' -f2- | rev)
+                        availability_zones=$(list_regions)
+                        # Check if selected availability zone is in the list of valid availability zones
+                        if ! echo "$2" | grep -qw "$availability_zones"; then
+                                echo -e "${BRed}Error: for IBM Cloud VPC you must select an availability zone as a region${Color_Off}"
+                                echo -e "${BRed}List all availability zones with ax region ls.. exiting${Color_Off}"
+                                exit
+                        fi
+                        cat $AXIOM_PATH/axiom.json | jq -r ".physical_region=\"$physical_region\"" | jq -r ".region=\"$2\"" |jq -r > $AXIOM_PATH/axiom.json.new
+                        ibmcloud target -r $physical_region -g "$(jq -r '.resource_group' "$AXIOM_PATH"/axiom.json)" -q
+                fi
+
 	mv $AXIOM_PATH/axiom.json.new $account_path
 	echo -e "${BWhite}Selected region $2${Color_Off}"
 	fi
