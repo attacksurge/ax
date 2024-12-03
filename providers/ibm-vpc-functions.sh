@@ -72,8 +72,8 @@ instance_list() {
 # used by axiom-ls
 instance_pretty() {
     data=$(instances)
-    instances=$(echo $data | jq -r '.[]|.name'| wc -l)
-    current_time=$(date +%s)  # Get the current time in seconds since epoch
+    instances=$(echo "$data" | jq -r '.[]|.name' | wc -l)
+    current_time=$(date +%s)
     header="Instance,Primary Ip,Backend Ip,Zone,Memory,CPU,Status,Profile,Active Hours"
     fields='.[] | [
         .name // "",
@@ -92,26 +92,24 @@ instance_pretty() {
         .created_at // ""
     ] | @csv'
 
-    # Process and print data
     data=$(echo "$data" | jq -r "$fields" | sed 's/^,/0,/; :a;s/,,/,0,/g;ta')
 
-    # Calculate active hours and total hours
     total_active_hours=0
-    data=$(echo "$data" | while IFS=',' read -r name primary_ip backend_ip zone memory cpu status profile created_at; do
-        created_ts=$(date -d "${created_at//\"/}" +%s)
-        active_hours=$(( (current_time - created_ts) / 3600 ))
-        total_active_hours=$((total_active_hours + active_hours))
-        echo "$name,$primary_ip,$backend_ip,$zone,$memory,$cpu,$status,$profile,$active_hours"
-    done)
 
-    # Sum total active hours
-    total_active_hours=$(echo "$data" | awk -F, '{sum+=$9} END {print sum}')
-
-    # Totals
-    totals="Total Instances: $instances,_,_,_,_,_,_,_,Total Active Hours: $total_active_hours"
-
-    # Print header, data, and totals
-    (echo "$header" && echo "$data" && echo "$totals") | sed 's/"//g' | column -t -s,
+    formatted_data=""
+    if [ "$instances" -gt 0 ]; then
+        formatted_data=$(echo "$data" | while IFS=',' read -r name primary_ip backend_ip zone memory cpu status profile created_at; do
+            created_ts=$(date -d "${created_at//\"/}" +%s)
+            active_hours=$(( (current_time - created_ts) / 3600 ))
+            total_active_hours=$((total_active_hours + active_hours))
+            echo "$name,$primary_ip,$backend_ip,$zone,$memory,$cpu,$status,$profile,$active_hours"
+        done)
+        total_active_hours=$(echo "$formatted_data" | awk -F, '{sum+=$9} END {print sum}')
+        totals="Total Instances: $instances,_,_,_,_,_,_,_,Total Active Hours: $total_active_hours"
+        (echo "$header" && echo "$formatted_data" && echo "$totals") | sed 's/"//g' | column -t -s,
+    else
+        echo "No instances found."
+    fi
 }
 
 ###################################################################
