@@ -20,7 +20,6 @@ create_instance() {
 	sleep 260
 }
 
-
 ###################################################################
 # deletes instance, if the second argument is set to "true", will not prompt
 # used by axiom-rm
@@ -41,8 +40,7 @@ delete_instance() {
 # Instances functions
 # used by many functions in this file
 instances() {
-ibmcloud sl vs list --column datacenter --column domain --column hostname --column id --column cpu --column memory --column public_ip --column private_ip --column power_state --column created_by --column action --output json
-	#ibmcloud  sl vs list --output json
+        ibmcloud sl vs list --column datacenter --column domain --column hostname --column id --column cpu --column memory --column public_ip --column private_ip --column power_state --column created_by --column action --output json
 }
 
 # takes one argument, name of instance, returns raw IP address
@@ -91,47 +89,77 @@ instance_pretty() {
 #  Used for axiom-exec axiom-fleet axiom-ssh
 #
 generate_sshconfig() {
-    # Get the list of accounts
-    accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
-    current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1) > /dev/null 2>&1
+    sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
+    sshkey=$(jq -r '.sshkey' < "$AXIOM_PATH/axiom.json")
+    generate_sshconfig=$(jq -r '.generate_sshconfig' < "$AXIOM_PATH/axiom.json")
     droplets="$(instances)"
 
-    # Temporary SSH config file
-    sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
+    # handle lock/cache mode
+    if [[ "$generate_sshconfig" == "lock" ]] || [[ "$generate_sshconfig" == "cache" ]] ; then
+        echo -e "${BYellow}Using cached SSH config. No regeneration performed. To revert run:${Color_Off} ax ssh --just-generate"
+        return 0
+    fi
+
+    # handle private mode
+    if [[ "$generate_sshconfig" == "private" ]] ; then
+        echo -e "${BYellow}Using instances private Ips for SSH config. To revert run:${Color_Off} ax ssh --just-generate"
+    fi
+
+    # create empty SSH config
     echo -n "" > "$sshnew"
-    echo -e "\tServerAliveInterval 60\n" >> "$sshnew"
+    {
+        echo -e "ServerAliveInterval 60"
+        echo -e "IdentityFile $HOME/.ssh/$sshkey"
+    } >> "$sshnew"
 
-    # Get the SSH key
-    sshkey=$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')
-    echo -e "IdentityFile $HOME/.ssh/$sshkey" >> "$sshnew"
+    declare -A name_counts
 
-    # Determine SSH config generation type
-    generate_sshconfig=$(cat "$AXIOM_PATH/axiom.json" | jq -r '.generate_sshconfig')
+    echo "$droplets" | jq -c '.[]?' 2>/dev/null | while read -r droplet; do
+        # extract fields
+        name=$(echo "$droplet" | jq -r '.hostname? // empty' 2>/dev/null)
+        public_ip=$(echo "$droplet" | jq -r '.primaryIpAddress? // empty' 2>/dev/null | head -n 1)
+        private_ip=$(echo "$droplet" | jq -r '.primaryBackendIpAddress? // empty' 2>/dev/null | head -n 1)
 
-    if [[ "$generate_sshconfig" == "private" ]]; then
-        echo -e "Warning: Your SSH config generation toggle is set to 'Private' for account: $current."
-        echo -e "Axiom will always attempt to SSH into the instances from their private backend network interface."
-        echo -e "To revert, run: axiom-ssh --just-generate"
+        # skip if name is empty
+        if [[ -z "$name" ]] ; then
+            continue
+        fi
 
-        # Generate SSH config using private backend IPs
-        for name in $(echo "$droplets" | jq -r '.[].hostname'); do
-            ip=$(echo "$droplets" | jq -r ".[] | select(.hostname==\"$name\") | .primaryBackendIpAddress")
-            echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
-        done
+        # select IP based on configuration mode
+        if [[ "$generate_sshconfig" == "private" ]]; then
+            ip="$private_ip"
+        else
+            ip="$public_ip"
+        fi
+
+        # skip if no IP is available
+        if [[ -z "$ip" ]]; then
+            continue
+        fi
+
+        # track hostnames in case of duplicates
+        if [[ -n "${name_counts[$name]}" ]]; then
+            count=${name_counts[$name]}
+            hostname="${name}-${count}"
+            name_counts[$name]=$((count + 1))
+        else
+            hostname="$name"
+            name_counts[$name]=2  # Start duplicate count at 2
+        fi
+
+        # add SSH config entry
+        echo -e "Host $hostname\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
+    done
+
+    # validate and apply the new SSH config
+    if ssh -F "$sshnew" null -G > /dev/null 2>&1; then
         mv "$sshnew" "$AXIOM_PATH/.sshconfig"
-
-    elif [[ "$generate_sshconfig" == "cache" ]]; then
-        echo -e "Warning: Your SSH config generation toggle is set to 'Cache' for account: $current."
-        echo -e "Axiom will never attempt to regenerate the SSH config."
-        echo -e "To revert, run: axiom-ssh --just-generate"
-
     else
-        # Generate SSH config using public IPs
-        for name in $(echo "$droplets" | jq -r '.[].hostname'); do
-            ip=$(echo "$droplets" | jq -r ".[] | select(.hostname==\"$name\") | .primaryIpAddress")
-            echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
-        done
-        mv "$sshnew" "$AXIOM_PATH/.sshconfig"
+        echo -e "${BRed}Error: Generated SSH config is invalid. Details:${Color_Off}"
+        ssh -F "$sshnew" null -G
+        cat "$sshnew"
+        rm -f "$sshnew"
+        return 1
     fi
 }
 
@@ -178,7 +206,6 @@ get_image_id() {
 	images=$(ibmcloud sl image list --private --output json)
 	name=$(echo $images | jq -r ".[].name" | grep -wx "$query" | tail -n 1)
 	id=$(echo $images |  jq -r ".[] | select(.name==\"$name\") | .id")
-
 	echo $id
 }
 
@@ -214,7 +241,7 @@ create_snapshot() {
 # used by axiom-regions
 #
 list_regions() {
-      ibmcloud sl vs options | sed -n '/datacenter/,/Size/p' | tr -s ' ' | rev | cut -d  ' ' -f 1| rev | tail -n +2 | head -n -1 | tr '\n' ','
+     ibmcloud sl vs options | sed -n '/datacenter/,/Size/p' | tr -s ' ' | rev | cut -d  ' ' -f 1| rev | tail -n +2 | head -n -1 | tr '\n' ','
 }
 
 regions() {

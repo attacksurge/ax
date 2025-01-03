@@ -66,8 +66,7 @@ instance_list() {
 
 # used by axiom-ls
 instance_pretty() {
-
-	type="$(jq -r .default_size "$AXIOM_PATH/axiom.json")"    
+	type="$(jq -r .default_size "$AXIOM_PATH/axiom.json")"
 	costs=$(curl -sL 'ec2.shop' -H 'accept: json')
 	header="Instance,Primary IP,Backend IP,Region,Type,Status,\$/M"
 	fields=".Reservations[].Instances[] | select(.State.Name != \"terminated\") | [.Tags?[]?.Value, .PublicIpAddress, .PrivateIpAddress, .Placement.AvailabilityZone, .InstanceType, .State.Name] | @csv"
@@ -80,57 +79,88 @@ instance_pretty() {
 	 totalCost=$(echo  "$cost * $numInstances"|bc)
 	fi
 	footer="_,_,_,Instances,$numInstances,Total,\$$totalCost"
-	(echo "$header" && echo "$data" && echo "$footer") | sed 's/"//g' | column -t -s, 
+	(echo "$header" && echo "$data" && echo "$footer") | sed 's/"//g' | column -t -s,
 }
 
 ###################################################################
 #  Dynamically generates axiom's SSH config based on your cloud inventory
-#  Choose between generating the sshconfig using private IP details, public IP details or optionally lock
-#  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig 
+#  Choose between generating the sshconfig using private IP details, public IP details or optionally lock/cache
+#  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig
 #  Used for axiom-exec axiom-fleet axiom-ssh
 #
 generate_sshconfig() {
-accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
-current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)> /dev/null 2>&1
-sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
-droplets="$(instances)"
-echo -n "" > $sshnew
-echo -e "\tServerAliveInterval 60\n" >> $sshnew
-sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-echo -e "IdentityFile $HOME/.ssh/$sshkey" >> $sshnew
-generate_sshconfig="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.generate_sshconfig')"
+    sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
+    sshkey=$(jq -r '.sshkey' < "$AXIOM_PATH/axiom.json")
+    generate_sshconfig=$(jq -r '.generate_sshconfig' < "$AXIOM_PATH/axiom.json")
+    droplets="$(instances)"
 
-if [[ "$generate_sshconfig" == "private" ]]; then
+    # handle lock/cache mode
+    if [[ "$generate_sshconfig" == "lock" ]] || [[ "$generate_sshconfig" == "cache" ]] ; then
+        echo -e "${BYellow}Using cached SSH config. No regeneration performed. To revert run:${Color_Off} ax ssh --just-generate"
+        return 0
+    fi
 
- echo -e "Warning your SSH config generation toggle is set to 'Private' for account : $(echo $current)."
- echo -e "axiom will always attempt to SSH into the instances from their private backend network interface. To revert run: axiom-ssh --just-generate"
- for name in $(echo "$droplets" | jq -r '.Reservations[].Instances[].Tags?[]?.Value')
- do
- ip=$(echo "$droplets" | jq -r ".Reservations[].Instances[] | select(.Tags?[]?.Value==\"$name\") | .PublicIpAddress")
- status=$(echo "$droplets" | jq -r ".Reservations[].Instances[] | select(.Tags?[]?.Value==\"$name\") | .State.Name")
- if [[ "$status" == "running" ]]; then
-        echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
- fi
- done
- mv $sshnew $AXIOM_PATH/.sshconfig
+    # handle private mode
+    if [[ "$generate_sshconfig" == "private" ]] ; then
+        echo -e "${BYellow}Using instances private Ips for SSH config. To revert run:${Color_Off} ax ssh --just-generate"
+    fi
 
- elif [[ "$generate_sshconfig" == "cache" ]]; then 
- echo -e "Warning your SSH config generation toggle is set to 'Cache' for account : $(echo $current)."
- echo -e "axiom will never attempt to regenerate the SSH config. To revert run: axiom-ssh --just-generate"
-        
- # If anything but "private" or "cache" is parsed from the generate_sshconfig in account.json, generate public IPs only
- #
- else
- for name in $(echo "$droplets" | jq -r '.Reservations[].Instances[].Tags?[]?.Value')
- do
- ip=$(echo "$droplets" | jq -r ".Reservations[].Instances[] | select(.Tags?[]?.Value==\"$name\") | .PublicIpAddress")
- status=$(echo "$droplets" | jq -r ".Reservations[].Instances[] | select(.Tags?[]?.Value==\"$name\") | .State.Name")
- if [[ "$status" == "running" ]]; then
-        echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
- fi
- done
- mv $sshnew $AXIOM_PATH/.sshconfig
-fi
+    # create empty SSH config
+    echo -n "" > "$sshnew"
+    {
+        echo -e "ServerAliveInterval 60"
+        echo -e "IdentityFile $HOME/.ssh/$sshkey"
+    } >> "$sshnew"
+
+    declare -A name_counts
+
+    echo "$droplets" | jq -c '.Reservations[].Instances[]?' | while read -r instance; do
+        # extract fields
+        name=$(echo "$instance" | jq -r '.Tags[]? | select(.Key=="Name") | .Value // empty' 2>/dev/null | head -n 1)
+        public_ip=$(echo "$instance" | jq -r '.PublicIpAddress? // empty' 2>/dev/null | head -n 1)
+        private_ip=$(echo "$instance" | jq -r '.PrivateIpAddress? // empty' 2>/dev/null  | head -n 1)
+
+        # skip if name is empty
+        if [[ -z "$name" ]] ; then
+            continue
+        fi
+
+        # select IP based on configuration mode
+        if [[ "$generate_sshconfig" == "private" ]]; then
+            ip="$private_ip"
+        else
+            ip="$public_ip"
+        fi
+
+        # skip if no IP is available
+        if [[ -z "$ip" ]]; then
+            continue
+        fi
+
+        # track hostnames in case of duplicates
+        if [[ -n "${name_counts[$name]}" ]]; then
+            count=${name_counts[$name]}
+            hostname="${name}-${count}"
+            name_counts[$name]=$((count + 1))
+        else
+            hostname="$name"
+            name_counts[$name]=2  # Start duplicate count at 2
+        fi
+
+        # add SSH config entry
+        echo -e "Host $hostname\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
+    done
+
+    # validate and apply the new SSH config
+    if ssh -F "$sshnew" null -G > /dev/null 2>&1; then
+        mv "$sshnew" "$AXIOM_PATH/.sshconfig"
+    else
+        echo -e "${BRed}Error: Generated SSH config is invalid. Details:${Color_Off}"
+        ssh -F "$sshnew" null -G
+        cat "$sshnew"
+        rm -f "$sshnew"
+        return 1
+    fi
 }
 
 ###################################################################
@@ -238,7 +268,7 @@ poweron() {
   aws ec2 start-instances --instance-ids "$id"
 }
 
-# axiom-power 
+# axiom-power
 poweroff() {
   instance_name="$1"
   id=$(instance_id "$instance_name")
@@ -267,8 +297,8 @@ sizes_list() {
   echo -e "InstanceType\tMemory\tVCPUS\tCost"
   curl -sL 'ec2.shop' -H 'accept: json' | jq -r '.Prices[] | [.InstanceType, .Memory, .VCPUS, .Cost] | @tsv'
 ) | awk '
-BEGIN { 
-  FS="\t"; 
+BEGIN {
+  FS="\t";
   OFS="\t";
   # Define column widths
   width1 = 20; # InstanceType

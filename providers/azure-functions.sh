@@ -91,26 +91,83 @@ instance_pretty() {
 
 ###################################################################
 #  Dynamically generates axiom's SSH config based on your cloud inventory
-#  Choose between generating the sshconfig using private IP details, public IP details or optionally lock
-#  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig 
+#  Choose between generating the sshconfig using private IP details, public IP details or optionally lock/cache
+#  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig
 #  Used for axiom-exec axiom-fleet axiom-ssh
 #
 generate_sshconfig() {
-        boxes="$(instances)"
-        sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
-        echo -n "" > "$sshnew"
-        echo -e "\tServerAliveInterval 60\n" >> $sshnew
-        sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-        echo -e "IdentityFile $HOME/.ssh/$sshkey" >> $sshnew
+    sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
+    sshkey=$(jq -r '.sshkey' < "$AXIOM_PATH/axiom.json")
+    generate_sshconfig=$(jq -r '.generate_sshconfig' < "$AXIOM_PATH/axiom.json")
+    droplets="$(instances)"
 
+    # handle lock/cache mode
+    if [[ "$generate_sshconfig" == "lock" ]] || [[ "$generate_sshconfig" == "cache" ]] ; then
+        echo -e "${BYellow}Using cached SSH config. No regeneration performed. To revert run:${Color_Off} ax ssh --just-generate"
+        return 0
+    fi
 
-        for name in $(echo "$boxes" | jq -r '.[].name')
-        do
-                ip=$(echo "$boxes" | jq -r ".[] | select(.name==\"$name\") | .publicIps")
-                echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
+    # handle private mode
+    if [[ "$generate_sshconfig" == "private" ]] ; then
+        echo -e "${BYellow}Using instances private Ips for SSH config. To revert run:${Color_Off} ax ssh --just-generate"
+    fi
 
-        done
-        mv $sshnew $AXIOM_PATH/.sshconfig
+    # create empty SSH config
+    echo -n "" > "$sshnew"
+    {
+        echo -e "ServerAliveInterval 60"
+        echo -e "IdentityFile $HOME/.ssh/$sshkey"
+    } >> "$sshnew"
+
+    declare -A name_counts
+
+    echo "$droplets" | jq -c '.[]?' 2>/dev/null | while read -r instance; do
+        # extract fields
+        name=$(echo "$instance" | jq -r '.name? // empty' 2>/dev/null)
+        public_ip=$(echo "$instance" | jq -r '.publicIps? // empty' 2>/dev/null | head -n 1)
+        private_ip=$(echo "$instance" | jq -r '.privateIps? // empty' 2>/dev/null | head -n 1)
+
+        # skip if name is empty
+        if [[ -z "$name" ]] ; then
+            continue
+        fi
+
+        # select IP based on configuration mode
+        if [[ "$generate_sshconfig" == "private" ]]; then
+            ip="$private_ip"
+        else
+            ip="$public_ip"
+        fi
+
+        # skip if no IP is available
+        if [[ -z "$ip" ]]; then
+            continue
+        fi
+
+        # track hostnames in case of duplicates
+        if [[ -n "${name_counts[$name]}" ]]; then
+            count=${name_counts[$name]}
+            hostname="${name}-${count}"
+            name_counts[$name]=$((count + 1))
+        else
+            hostname="$name"
+            name_counts[$name]=2  # Start duplicate count at 2
+        fi
+
+        # add SSH config entry
+        echo -e "Host $hostname\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
+    done
+
+    # validate and apply the new SSH config
+    if ssh -F "$sshnew" null -G > /dev/null 2>&1; then
+        mv "$sshnew" "$AXIOM_PATH/.sshconfig"
+    else
+        echo -e "${BRed}Error: Generated SSH config is invalid. Details:${Color_Off}"
+        ssh -F "$sshnew" null -G
+        cat "$sshnew"
+        rm -f "$sshnew"
+        return 1
+    fi
 }
 
 ###################################################################

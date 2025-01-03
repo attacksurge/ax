@@ -107,45 +107,78 @@ instance_pretty() {
 # Generate SSH config specfied in generate_sshconfig key:value in account.json
 #
 generate_sshconfig() {
-accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
-current=$(ls -lh "$AXIOM_PATH/axiom.json" | awk '{ print $11 }' | tr '/' '\n' | grep json | sed 's/\.json//g') > /dev/null 2>&1
-droplets="$(instances)"
-sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
-echo -n "" > $sshnew
-echo -e "\tServerAliveInterval 60\n" >> $sshnew
-sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-echo -e "IdentityFile $HOME/.ssh/$sshkey" >> $sshnew
-generate_sshconfig="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.generate_sshconfig')"
+    sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
+    sshkey=$(jq -r '.sshkey' < "$AXIOM_PATH/axiom.json")
+    generate_sshconfig=$(jq -r '.generate_sshconfig' < "$AXIOM_PATH/axiom.json")
+    droplets="$(instances)"
 
-if [[ "$generate_sshconfig" == "private" ]]; then
+    # handle lock/cache mode
+    if [[ "$generate_sshconfig" == "lock" ]] || [[ "$generate_sshconfig" == "cache" ]] ; then
+        echo -e "${BYellow}Using cached SSH config. No regeneration performed. To revert run:${Color_Off} ax ssh --just-generate"
+        return 0
+    fi
 
- echo -e "Warning your SSH config generation toggle is set to 'Private' for account : $(echo $current)."
- echo -e "axiom will always attempt to SSH into the instances from their private backend network interface. To revert run: axiom-ssh --just-generate"
- for name in $(echo "$droplets" | jq -r '.[].name')
- do
- ip=$(echo "$droplets" | jq -r ".[] | select(.name==\"$name\") | .private_net.ipv4.ip")
- if [[ -n "$ip" ]]; then
-  echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
- fi
- done
- mv $sshnew $AXIOM_PATH/.sshconfig
+    # handle private mode
+    if [[ "$generate_sshconfig" == "private" ]] ; then
+        echo -e "${BYellow}Using instances private Ips for SSH config. To revert run:${Color_Off} ax ssh --just-generate"
+    fi
 
- elif [[ "$generate_sshconfig" == "cache" ]]; then
- echo -e "Warning your SSH config generation toggle is set to 'Cache' for account : $(echo $current)."
- echo -e "axiom will never attempt to regenerate the SSH config. To revert run: axiom-ssh --just-generate"
+    # create empty SSH config
+    echo -n "" > "$sshnew"
+    {
+        echo -e "ServerAliveInterval 60"
+        echo -e "IdentityFile $HOME/.ssh/$sshkey"
+    } >> "$sshnew"
 
- # If anything but "private" or "cache" is parsed from the generate_sshconfig in account.json, generate public IPs only
- #
- else
- for name in $(echo "$droplets" | jq -r '.[].name')
- do
- ip=$(echo "$droplets" | jq -r ".[] | select(.name==\"$name\") | .public_net.ipv4.ip")
- if [[ -n "$ip" ]]; then
-  echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
- fi
- done
- mv $sshnew $AXIOM_PATH/.sshconfig
-fi
+    declare -A name_counts
+
+    echo "$droplets" | jq -c '.[]?' 2>/dev/null | while read -r droplet; do
+        # extract fields
+        name=$(echo "$droplet" | jq -r '.name? // empty' 2>/dev/null)
+        public_ip=$(echo "$droplet" | jq -r '.public_net?.ipv4?.ip? // empty' 2>/dev/null | head -n 1)
+        private_ip=$(echo "$droplet" | jq -r '.private_net?.ipv4?.ip?  // empty' 2>/dev/null | head -n 1)
+
+        # skip if name is empty
+        if [[ -z "$name" ]] ; then
+            continue
+        fi
+
+        # select IP based on configuration mode
+        if [[ "$generate_sshconfig" == "private" ]]; then
+            ip="$private_ip"
+        else
+            ip="$public_ip"
+        fi
+
+        # skip if no IP is available
+        if [[ -z "$ip" ]]; then
+            continue
+        fi
+
+        # track hostnames in case of duplicates
+        if [[ -n "${name_counts[$name]}" ]]; then
+            count=${name_counts[$name]}
+            hostname="${name}-${count}"
+            name_counts[$name]=$((count + 1))
+        else
+            hostname="$name"
+            name_counts[$name]=2  # Start duplicate count at 2
+        fi
+
+        # add SSH config entry
+        echo -e "Host $hostname\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
+    done
+
+    # validate and apply the new SSH config
+    if ssh -F "$sshnew" null -G > /dev/null 2>&1; then
+        mv "$sshnew" "$AXIOM_PATH/.sshconfig"
+    else
+        echo -e "${BRed}Error: Generated SSH config is invalid. Details:${Color_Off}"
+        ssh -F "$sshnew" null -G
+        cat "$sshnew"
+        rm -f "$sshnew"
+        return 1
+    fi
 }
 
 ###################################################################
@@ -196,7 +229,6 @@ get_image_id() {
         fi
         echo $id
 }
-
 
 ###################################################################
 # Manage snapshots

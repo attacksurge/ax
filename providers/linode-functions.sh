@@ -49,7 +49,6 @@ delete_instance() {
 # takes no arguments, outputs JSON object with instances
 instances() {
 	linode-cli linodes list --json
-	#linode-cli linodes list --json | jq '.[] | [.label,.ipv4[],.region,.specs.memory]'
 }
 
 # takes one argument, name of instance, returns raw IP address
@@ -73,8 +72,8 @@ instance_pretty() {
   type="$(jq -r .default_size "$AXIOM_PATH/axiom.json")"
   #monthly price of linode type 
   price=$(linode-cli linodes type-view $type --json|jq -r '.[].price.monthly')
-#  totalPrice=$(( "$price * $linodes" | bc))
-totalPrice=$(awk "BEGIN {print $price * $linodes}")
+  #  totalPrice=$(( "$price * $linodes" | bc))
+  totalPrice=$(awk "BEGIN {print $price * $linodes}")
 
   header="Instance,Primary Ip,Backend Ip,Region,Size,Status,\$/M"
   totals="_,_,_,Instances,$linodes,Total,\$$totalPrice"
@@ -87,48 +86,83 @@ totalPrice=$(awk "BEGIN {print $price * $linodes}")
 ###################################################################
 #  Dynamically generates axiom's SSH config based on your cloud inventory
 #  Choose between generating the sshconfig using private IP details, public IP details or optionally lock
-#  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig 
+#  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig
 #  Used for axiom-exec axiom-fleet axiom-ssh
 #
-# Generate SSH config specfied in generate_sshconfig key:value in account.json
-#
 generate_sshconfig() {
-        accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
-        current=$(readlink -f "$AXIOM_PATH/axiom.json" | rev | cut -d / -f 1 | rev | cut -d . -f 1)> /dev/null 2>&1
-        droplets="$(instances)"
-        sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
-        echo -n "" > $sshnew 
-        echo -e "\tServerAliveInterval 60\n" >> $sshnew 
-        sshkey="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.sshkey')"
-        echo -e "IdentityFile $HOME/.ssh/$sshkey" >> $sshnew 
-        generate_sshconfig="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.generate_sshconfig')"
+    sshnew="$AXIOM_PATH/.sshconfig.new$RANDOM"
+    sshkey=$(jq -r '.sshkey' < "$AXIOM_PATH/axiom.json")
+    generate_sshconfig=$(jq -r '.generate_sshconfig' < "$AXIOM_PATH/axiom.json")
+    droplets="$(instances)"
 
-    if [[ "$generate_sshconfig" == "private" ]]; then
-        echo -e "Warning your SSH config generation toggle is set to 'Private' for account : $(echo $current)."
-        echo -e "axiom will always attempt to SSH into the instances from their private backend network interface. To revert: axiom-ssh --just-generate"
+    # handle lock/cache mode
+    if [[ "$generate_sshconfig" == "lock" ]] || [[ "$generate_sshconfig" == "cache" ]] ; then
+        echo -e "${BYellow}Using cached SSH config. No regeneration performed. To revert run:${Color_Off} ax ssh --just-generate"
+        return 0
+    fi
 
-    for name in $(echo "$droplets" | jq -r '.[].label'); do
-        ip=$(echo "$droplets" | jq -r ".[] | select(.label==\"$name\") | .ipv4[1]")
-        echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew 
-     done
+    # handle private mode
+    if [[ "$generate_sshconfig" == "private" ]] ; then
+        echo -e "${BYellow}Using instances private Ips for SSH config. To revert run:${Color_Off} ax ssh --just-generate"
+    fi
 
-    mv $sshnew  $AXIOM_PATH/.sshconfig
+    # create empty SSH config
+    echo -n "" > "$sshnew"
+    {
+        echo -e "ServerAliveInterval 60"
+        echo -e "IdentityFile $HOME/.ssh/$sshkey"
+    } >> "$sshnew"
 
-        elif [[ "$generate_sshconfig" == "cache" ]]; then
-            echo -e "Warning your SSH config generation toggle is set to 'Cache' for account : $(echo $current)."
-        echo -e "axiom will never attempt to regenerate the SSH config. To change edit $HOME/.axiom/account/$current.json"
+    declare -A name_counts
 
-    # If anything but "private" or "cache" is parsed from the generate_sshconfig in account.json, generate public IPs only
-    #
+    echo "$droplets" | jq -c '.[]?' 2>/dev/null | while read -r droplet; do
+        # extract fields
+        name=$(echo "$droplet" | jq -r '.label? // empty' 2>/dev/null)
+        public_ip=$(echo "$droplet" | jq -r '.ipv4[0]? // empty' 2>/dev/null | head -n 1)
+        private_ip=$(echo "$droplet" | jq -r '.ipv4[1]? // empty' 2>/dev/null | head -n 1)
+
+        # skip if name is empty
+        if [[ -z "$name" ]] ; then
+            continue
+        fi
+
+        # select IP based on configuration mode
+        if [[ "$generate_sshconfig" == "private" ]]; then
+            ip="$private_ip"
         else
-        for name in $(echo "$droplets" | jq -r '.[].label'); do
-            ip=$(echo "$droplets" | jq -r ".[] | select(.label==\"$name\") | .ipv4[0]")
-            echo -e "Host $name\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> $sshnew
-        done
-        mv $sshnew  $AXIOM_PATH/.sshconfig
+            ip="$public_ip"
+        fi
+
+        # skip if no IP is available
+        if [[ -z "$ip" ]]; then
+            continue
+        fi
+
+        # track hostnames in case of duplicates
+        if [[ -n "${name_counts[$name]}" ]]; then
+            count=${name_counts[$name]}
+            hostname="${name}-${count}"
+            name_counts[$name]=$((count + 1))
+        else
+            hostname="$name"
+            name_counts[$name]=2  # Start duplicate count at 2
+        fi
+
+        # add SSH config entry
+        echo -e "Host $hostname\n\tHostName $ip\n\tUser op\n\tPort 2266\n" >> "$sshnew"
+    done
+
+    # validate and apply the new SSH config
+    if ssh -F "$sshnew" null -G > /dev/null 2>&1; then
+        mv "$sshnew" "$AXIOM_PATH/.sshconfig"
+    else
+        echo -e "${BRed}Error: Generated SSH config is invalid. Details:${Color_Off}"
+        ssh -F "$sshnew" null -G
+        cat "$sshnew"
+        rm -f "$sshnew"
+        return 1
     fi
 }
-
 
 ###################################################################
 # takes any number of arguments, each argument should be an instance or a glob, say 'omnom*', returns a sorted list of instances based on query
@@ -184,7 +218,7 @@ snapshots() {
         linode-cli images list --json
 }
 
-# only displays private images 
+# only displays private images
 # axiom-images
 get_snapshots() {
     linode-cli images list --is_public false
@@ -195,7 +229,7 @@ get_snapshots() {
 # axiom-images
 delete_snapshot() {
         name="$1"
-    image_id=$(get_image_id "$name")
+        image_id=$(get_image_id "$name")
         linode-cli images delete "$image_id"
 }
 
@@ -204,7 +238,7 @@ create_snapshot() {
         instance="$1"
 	snapshot_name="$2"
         disk_id=$(linode-cli linodes disks-list "$(instance_id $instance)" --text | grep axiom | tr '\t' ' ' | cut -d ' ' -f 1)
-        linode-cli images create --disk_id "$disk_id" --text --label $snapshot_name 
+        linode-cli images create --disk_id "$disk_id" --text --label $snapshot_name
 }
 
 ###################################################################
