@@ -83,8 +83,9 @@ instance_pretty() {
 
 ###################################################################
 #  Dynamically generates axiom's SSH config based on your cloud inventory
-#  Choose between generating the sshconfig using private IP details, public IP details or optionally lock
-#  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig
+#  Choose between generating the sshconfig using private IP details,
+#  public IP details, or optionally lock
+#  Lock will never generate an SSH config and only use the cached config ~/.axiom/.sshconfig
 #  Used for axiom-exec axiom-fleet axiom-ssh
 #
 generate_sshconfig() {
@@ -111,7 +112,24 @@ generate_sshconfig() {
         echo -e "IdentityFile $HOME/.ssh/$sshkey"
     } >> "$sshnew"
 
-    declare -A name_counts
+    name_count_str=""
+
+    # Helper to get the current count for a given name
+    get_count() {
+        local key="$1"
+        # Find "key:<number>" in name_count_str and echo just the number
+        echo "$name_count_str" | grep -oE "$key:[0-9]+" | cut -d: -f2 | tail -n1
+    }
+
+    # Helper to set/update the current count for a given name
+    set_count() {
+        local key="$1"
+        local new_count="$2"
+        # Remove old 'key:<number>' entries
+        name_count_str="$(echo "$name_count_str" | sed "s/$key:[0-9]*//g")"
+        # Append updated entry
+        name_count_str="$name_count_str $key:$new_count"
+    }
 
     echo "$droplets" | jq -c '.[]?' 2>/dev/null | while read -r droplet; do
         # extract fields
@@ -136,14 +154,18 @@ generate_sshconfig() {
             continue
         fi
 
-        # track hostnames in case of duplicates
-        if [[ -n "${name_counts[$name]}" ]]; then
-            count=${name_counts[$name]}
-            hostname="${name}-${count}"
-            name_counts[$name]=$((count + 1))
+        current_count="$(get_count "$name")"
+        if [[ -n "$current_count" ]]; then
+            # If a count exists, use it as a suffix
+            hostname="${name}-${current_count}"
+            # Increment for the next duplicate
+            new_count=$((current_count + 1))
+            set_count "$name" "$new_count"
         else
+            # First time we see this name
             hostname="$name"
-            name_counts[$name]=2  # Start duplicate count at 2
+            # Initialize its count at 2 (so the next time is -2)
+            set_count "$name" 2
         fi
 
         # add SSH config entry

@@ -85,8 +85,9 @@ instance_pretty() {
 
 ###################################################################
 #  Dynamically generates axiom's SSH config based on your cloud inventory
-#  Choose between generating the sshconfig using private IP details, public IP details or optionally lock
-#  Lock will never generate an SSH config and only used the cached config ~/.axiom/.sshconfig
+#  Choose between generating the sshconfig using private IP details,
+#  public IP details, or optionally lock
+#  Lock will never generate an SSH config and only use the cached config ~/.axiom/.sshconfig
 #  Used for axiom-exec axiom-fleet axiom-ssh
 #
 generate_sshconfig() {
@@ -113,7 +114,24 @@ generate_sshconfig() {
         echo -e "IdentityFile $HOME/.ssh/$sshkey"
     } >> "$sshnew"
 
-    declare -A name_counts
+    name_count_str=""
+
+    # Helper to get the current count for a given name
+    get_count() {
+        local key="$1"
+        # Find "key:<number>" in name_count_str and echo just the number
+        echo "$name_count_str" | grep -oE "$key:[0-9]+" | cut -d: -f2 | tail -n1
+    }
+
+    # Helper to set/update the current count for a given name
+    set_count() {
+        local key="$1"
+        local new_count="$2"
+        # Remove old 'key:<number>' entries
+        name_count_str="$(echo "$name_count_str" | sed "s/$key:[0-9]*//g")"
+        # Append updated entry
+        name_count_str="$name_count_str $key:$new_count"
+    }
 
     echo "$droplets" | jq -c '.[]?' 2>/dev/null | while read -r droplet; do
         # extract fields
@@ -138,14 +156,18 @@ generate_sshconfig() {
             continue
         fi
 
-        # track hostnames in case of duplicates
-        if [[ -n "${name_counts[$name]}" ]]; then
-            count=${name_counts[$name]}
-            hostname="${name}-${count}"
-            name_counts[$name]=$((count + 1))
+        current_count="$(get_count "$name")"
+        if [[ -n "$current_count" ]]; then
+            # If a count exists, use it as a suffix
+            hostname="${name}-${current_count}"
+            # Increment for the next duplicate
+            new_count=$((current_count + 1))
+            set_count "$name" "$new_count"
         else
+            # First time we see this name
             hostname="$name"
-            name_counts[$name]=2  # Start duplicate count at 2
+            # Initialize its count at 2 (so the next time is -2)
+            set_count "$name" 2
         fi
 
         # add SSH config entry
@@ -297,22 +319,26 @@ delete_instances() {
     names="$1"
     force="$2"
 
-    declare -A linode_ids
+    linode_names=()
+    linode_ids=()
 
-    # create array with instance ids
     linode_cli_output=$(linode-cli linodes list --format "id,label" --no-headers --text)
+
+    # gather the IDs for the provided names
     for name in $names; do
         id=$(echo "$linode_cli_output" | awk -v name="$name" '$2 == name {print $1}')
         if [ -n "$id" ]; then
-            linode_ids["$name"]="$id"
+            linode_names+=("$name")
+            linode_ids+=("$id")
         else
-            echo -e "${BRed}Error: No Linode found with the given name: '$name'.${BRed}"
+            echo -e "${BRed}Error: No Linode found with the given name: '$name'.${Color_Off}"
         fi
     done
 
-    # iterate over names and delete instances
-    for name in "${!linode_ids[@]}"; do
-        id="${linode_ids[$name]}"
+    # iterate over the arrays in parallel
+    for i in "${!linode_names[@]}"; do
+        name="${linode_names[$i]}"
+        id="${linode_ids[$i]}"
 
         if [ "$force" != "true" ]; then
             read -p "Are you sure you want to delete instance '$name' (Linode ID: $id)? (y/N): " confirm
@@ -323,9 +349,10 @@ delete_instances() {
         fi
 
         echo -e "${Red}Deleting: '$name' (Linode ID: $id)...${Color_Off}"
+        # run linode-cli deletion in the background
         linode-cli linodes delete "$id" >/dev/null 2>&1 &
     done
 
-# wait until all background jobs are finished deleting
-wait
+    # wait for all background jobs to complete
+    wait
 }
