@@ -42,6 +42,11 @@ then
                         ibmcloud target -r $physical_region -g "$(jq -r '.resource_group' "$AXIOM_PATH"/axiom.json)" -q
                 fi
 
+                if [ "$provider" = "aws" ]; then
+                        aws configure set region $2
+                fi
+
+
 	mv $AXIOM_PATH/axiom.json.new $account_path
 	echo -e "${BWhite}Selected region $2${Color_Off}"
 	fi
