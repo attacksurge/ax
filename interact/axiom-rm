@@ -46,6 +46,9 @@ for var in "$@"; do
         -m|--multi)
             multi=true
             ;;
+       --debug)
+            set -xv
+            ;;
         *)
             var=$(echo "$var" | sed 's/\\\*/\*/g') # Convert \* to *
             query="$query '$var'"

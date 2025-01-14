@@ -356,3 +356,93 @@ delete_instances() {
         done
     fi
 }
+
+###################################################################
+# Create multiple instances at the same time
+#
+# Needed for axiom-init
+create_instances() {
+    image_id="$1"
+    size_slug="$2"
+    region="$3"
+    user_data="$4"
+    timeout="$5"
+    shift 5
+    names=("$@")  # Remaining arguments are instance names
+
+    # Create temporary user data file
+    user_data_file=$(mktemp)
+    echo "$user_data" > "$user_data_file"
+
+    # Track instance creation statuses
+    processed_file=$(mktemp)
+    interval=8   # Time between status checks
+    elapsed=0
+
+    # Store created instance names
+    created_instances=()
+
+    # Create instances in parallel
+    for name in "${names[@]}"; do
+        output=$(scw instance server create name="$name" \
+            image="$image_id" \
+            type="$size_slug" \
+            zone="$region" \
+            cloud-init=@"$user_data_file" \
+            ip=new -o json 2>&1)
+
+        if [ $? -eq 0 ]; then
+            created_instances+=("$name")
+        else
+            >&2 echo -e "${BRed}Error creating instance '$name': $output${Color_Off}"
+        fi
+    done
+
+    # If no instances were created successfully, exit early
+    if [ ${#created_instances[@]} -eq 0 ]; then
+        rm -f "$processed_file" "$user_data_file"
+        return 1
+    fi
+
+    # Monitor instance statuses
+    while [ "$elapsed" -lt "$timeout" ]; do
+        all_ready=true
+
+        # Get current status of all instances
+        current_statuses=$(scw instance server list -o json)
+
+        for name in "${created_instances[@]}"; do
+            # Get instance details
+            instance_data=$(echo "$current_statuses" | jq -r ".[] | select(.name==\"$name\")")
+            state=$(echo "$instance_data" | jq -r '.state // empty')
+            ip=$(echo "$instance_data" | jq -r '.public_ip.address // empty')
+
+            if [[ "$state" == "running" ]]; then
+                # Only announce once per instance
+                if ! grep -q "^$name\$" "$processed_file"; then
+                    echo "$name" >> "$processed_file"
+                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at IP '${BGreen}${ip}${BWhite}'!"
+                fi
+            else
+                all_ready=false
+            fi
+        done
+
+        # If all instances are running, we're done
+        if $all_ready; then
+            rm -f "$processed_file" "$user_data_file"
+            sleep 30
+            return 0
+        fi
+
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    # Clean up temporary files
+    rm -f "$processed_file" "$user_data_file"
+
+    # If we get here, timeout was reached
+    >&2 echo -e "${BRed}Error: Timeout reached before all instances became ready.${Color_Off}"
+    return 1
+}

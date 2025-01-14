@@ -370,3 +370,85 @@ delete_instances() {
         fi
     fi
 }
+
+###################################################################
+# experimental v2 function
+# create multiple instances at the same time
+# used by axiom-fleet
+#
+create_instances() {
+    image_id="$1"
+    size="$2"
+    region="$3"
+    user_data="$4"
+    timeout="$5"
+    shift 5
+    names=("$@")  # Remaining arguments are instance names
+
+    # Import or retrieve SSH key fingerprint
+    sshkey="$(jq -r '.sshkey' < "$AXIOM_PATH/axiom.json")"
+    sshkey_fingerprint="$(ssh-keygen -l -E md5 -f ~/.ssh/$sshkey.pub | awk '{print $2}' | cut -d : -f 2-)"
+    keyid=$(doctl compute ssh-key import "$sshkey" \
+        --public-key-file ~/.ssh/$sshkey.pub \
+        --format ID \
+        --no-header 2>/dev/null) ||
+    keyid=$(doctl compute ssh-key list | grep "$sshkey_fingerprint" | awk '{print $1 }')
+
+    # Create instances in one API call and capture output
+    instance_data=$(doctl compute droplet create "${names[@]}" \
+        --image "$image_id" \
+        --size "$size" \
+        --region "$region" \
+        --enable-ipv6 \
+        --ssh-keys "$keyid" \
+        --format ID,Name \
+        --no-header \
+        --user-data "$user_data")
+
+    # Extract instance IDs and names
+    instance_ids=($(echo "$instance_data" | awk '{print $1}'))
+    instance_names=($(echo "$instance_data" | awk '{print $2}'))
+
+    # Create a temporary file to track processed instances
+    processed_file=$(mktemp)
+
+    # Monitor instance statuses
+    interval=8   # Time between status checks
+    elapsed=0
+
+    while [ "$elapsed" -lt "$timeout" ]; do
+        all_ready=true
+
+        # Fetch current droplet data
+        current_statuses=$(doctl compute droplet list --format ID,Name,Status,PublicIPv4 --no-header)
+
+        # Process instance statuses
+        for i in "${!instance_ids[@]}"; do
+            id="${instance_ids[$i]}"
+            name="${instance_names[$i]}"
+            status=$(echo "$current_statuses" | awk -v id="$id" '$1 == id {print $3}')
+            ip=$(echo "$current_statuses" | awk -v id="$id" '$1 == id {print $4}')
+
+            if [[ "$status" == "active" ]]; then
+                if ! grep -q "^$name\$" "$processed_file"; then
+                    echo "$name" >> "$processed_file"
+                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!"
+                fi
+            else
+                all_ready=false
+            fi
+        done
+
+        if $all_ready; then
+            rm -f "$processed_file"  # Clean up the temporary file
+            sleep 30
+            return 0
+        fi
+
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    rm -f "$processed_file"  # Clean up the temporary file
+    return 1
+}

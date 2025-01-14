@@ -1,0 +1,329 @@
+#!/usr/bin/env bash
+
+###########################################################################################################
+# Header
+#
+AXIOM_PATH="$HOME/.axiom"
+source "$AXIOM_PATH/interact/includes/vars.sh"
+source "$AXIOM_PATH/interact/includes/functions.sh"
+source "$AXIOM_PATH/interact/includes/system-notification.sh"
+BASEOS="$(uname)"
+case $BASEOS in
+    'Darwin')
+        PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+        ;;
+    *) ;;
+esac
+
+###########################################################################################################
+# Declare defaut variables
+#
+region_array=()
+gen_name=""
+amount=false
+provider="$(jq -r ".provider" "$AXIOM_PATH"/axiom.json)"
+image="$(jq -r '.imageid' "$AXIOM_PATH"/axiom.json)"
+regions="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
+sshkey="$(jq -r '.sshkey' "$AXIOM_PATH"/axiom.json)"
+default_size="$(jq -r '.default_size' "$AXIOM_PATH"/axiom.json)"
+image_id=""
+manual_image_id=false
+timeout_sleep=6
+
+###########################################################################################################
+# DO Region Transfer
+# Transfer image to all regions in unique_regions where the image does not yet exist. DO only.
+#
+region_transfer() {
+    if [[ "$provider" == "do" ]]; then
+        # Get list of regions where the image is available
+        avail_image_id_regions=$(doctl compute image get "$image_id" -o json | jq -r '.[] | .regions[]')
+
+        # Iterate over all regions in unique_regions
+        for region in "${unique_regions[@]}"; do
+            # Check if the image is available in the current region
+            if [[ "$avail_image_id_regions" != *"$region"* ]]; then
+                echo -e "${BYellow}Image '${BRed}${image}${BYellow}' not found in region '${BRed}${region}${BYellow}'. Transferring...${Color_Off}"
+                echo -e "${BYellow}This can take a few minutes, please be patient...${Color_Off}"
+
+                # Transfer image to the region
+                doctl compute image-action transfer "$image_id" --region "$region" --wait
+                if [ $? -eq 0 ]; then
+                    echo -e "${BGreen}Image transfer to region '${region}' succeeded.${Color_Off}"
+                    echo -e "${BWhite}Waiting 90 seconds to ensure availability...${Color_Off}"
+                    sleep 90
+                else
+                    echo -e "${BRed}Image transfer to region '${region}' failed.${Color_Off}"
+                    echo -e "Use '${BWhite}axiom-region ls${BRed}' to list regions or '${BWhite}axiom-images ls${BRed}' to list images.${Color_Off}"
+                fi
+            fi
+        done
+    fi
+}
+
+###########################################################################################################
+# Help Menu
+#
+function usage() {
+    echo -e "${BWhite}Description:${Color_Off}"
+    echo -e "  Spin up fleets of axiom instances in one or multiple regions."
+    echo -e "  Specify the name of your fleet (fleet prefix) or have axiom choose for you."
+    echo -e "${BWhite}Examples:${Color_Off}"
+    echo -e "  ${BGreen}axiom-fleet ctbb ${Color_Off} # Spin up 3 instances named ctbb01 ctbb02 and ctbb03"
+    echo -e "  ${BGreen}axiom-fleet -i 10${Color_Off} # Spin up 10 instances with random fleet prefix"
+    echo -e "  ${BGreen}axiom-fleet jerry -i 25 --regions dal13,lon06,fra05${Color_Off} # Spin up 25 instances named jerry01 to jerry25 using Round-robin region distribution"
+    echo -e "${BWhite}Usage:${Color_Off}"
+    echo -e "  <fleet prefix> (optional)"
+    echo -e "    Name of fleet prefix (default is random fleet prefix)"
+    echo -e "  -i/--instances <required integer>"
+    echo -e "    The number of instances to spin up"
+    echo -e "  -r/--regions <regions> (optional)"
+    echo -e "    Supply comma-separated regions to cycle through (default is region in ~/.axiom/axiom.json)"
+    echo -e "  --image <image name> (optional)"
+    echo -e "    Manually set the image to use (default is imageid in ~/.axiom/axiom.json)"
+    echo -e "  --debug (optional)"
+    echo -e "    Run with set -xv, warning: very verbose"
+    echo -e "  --help (optional)"
+    echo -e "    Display this help menu"
+}
+
+###########################################################################################################
+# Parse command line arguments
+#
+if [ $# -eq 0 ]; then
+    usage
+    exit 0
+fi
+i=0
+for arg in "$@"
+do
+    if [[ "$arg" == "--help" ]] || [[ "$arg" == "-h" ]] ; then
+        usage
+        exit
+    fi
+    i=$((i+1))
+    if [[  ! " ${pass[@]} " =~ " ${i} " ]]; then
+        set=false
+        if [[ "$arg" == "--debug" ]]; then
+            set -xv
+            set=true
+            pass+=($i)
+        fi
+        if [[ "$arg" == "-i" ]] || [[ "$arg" == "--instances" ]]; then
+            n=$((i+1))
+            amount=$(echo ${!n})
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$arg" == "--regions" ]] || [[ "$arg" == "-r" ]]; then
+            n=$((i+1))
+            regions=$(echo ${!n})
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$arg" == "--image" ]] ; then
+            n=$((i+1))
+            image=$(echo ${!n})
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$arg" == "--image-id" ]]; then
+            n=$((i+1))
+            manual_image_id=$(echo ${!n})
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if  [[ "$set" != "true" ]]; then
+            space=" "
+            if [[ $arg =~ $space ]]; then
+                args="$args \"$arg\""
+            else
+                args="$args $arg"
+            fi
+        fi
+    fi
+
+done
+
+###########################################################################################################
+# If -i /--instances isnt used, default to three instances
+#
+if [[ "$amount" == "false" ]]; then
+    amount=3
+fi
+
+###########################################################################################################
+# Generate name
+#
+if [ -z ${args+x} ]; then
+    gen_name="${names[$RANDOM % ${#names[@]} ]}"
+else
+    gen_name=$(echo "$args" | tr -d ' ')
+fi
+
+###########################################################################################################
+# Get image_id from $image ( default is from axiom.json ) or from user supplied manual image id param
+#
+if [ "$manual_image_id" != "false" ]
+then
+    image_id="$manual_image_id"
+else
+    image_id="$(get_image_id "$image")"
+    if [ -z "$image_id" ]; then
+        echo -e "${BRed}ERROR: imageid ${Color_Off}[ ${BBlue}$image ${Color_Off}]${BRed} not found in ${Color_Off}[ ${BBlue}~/.axiom/axiom.json ${Color_Off}]${BRed}. you may need to run ${Color_Off}[ ${BBlue}axiom-build --setup ${Color_Off}]${BRed} to build a new image."
+        echo -e "${BRed}if you've already built an image, list all images with ${Color_Off}[ ${BBlue}axiom-images ls ${Color_Off}]${BRed} and select it with ${Color_Off}[ ${BBlue}axiom-images select axiom-\$provisioner-\$timestamp ${Color_Off}]"
+        echo -e "${BRed}exiting...${Color_Off}"
+        exit 1
+    fi
+fi
+
+###########################################################################################################
+# Check if ssh key is specified in axiom.json
+#
+if [ "$sshkey" == "" ] || [ "$sshkey" == "null" ]; then
+    echo -e  "${BYellow}WARNING: sshkey not found in ${Color_Off}[ ${BBlue}~/.axiom/axiom.json ${Color_Off}]${BYellow}. adding ${Color_Off}[ ${BBlue}axiom_rsa ${Color_Off}] ${BYellow}key as a backup."
+    account_path=$(ls -la "$AXIOM_PATH"/axiom.json | rev | cut -d " " -f 1 | rev)
+    sshkey=axiom_rsa
+    if [ -f ~/.ssh/axiom_rsa ] ; then
+        jq '.sshkey="axiom_rsa"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"
+    else
+        ssh-keygen -b 2048 -t rsa -f ~/.ssh/axiom_rsa -q -N ""
+        jq '.sshkey="axiom_rsa"' <"$account_path">"$AXIOM_PATH"/tmp.json ; mv "$AXIOM_PATH"/tmp.json "$account_path"  >> /dev/null 2>&1
+    fi
+fi
+
+###########################################################################################################
+# Create cloud-init user-data to inject ssh pub key
+#
+if [ -f ~/.ssh/$sshkey.pub ] ; then
+    public_key_content=$(cat "$HOME/.ssh/$sshkey.pub")
+    user_data=$(cat <<EOF
+#cloud-config
+users:
+  - default
+  - name: op
+    ssh-authorized-keys:
+      - $public_key_content
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    shell: /bin/bash
+EOF
+)
+fi
+
+###########################################################################################################
+# Determine starting index to avoid duplicate names
+#
+total=$(query_instances "$gen_name*" | tr " " "\n" | sed 's/[^0-9]*//g' | sort -nr | head -n1)
+total="${total#0}"  # Remove leading zeros
+start=$((total + 1))  # Start from the next available index
+end=$((start + amount - 1))  # Determine the last index
+names=()
+
+# Generate unique instance names
+for i in $(seq -f "%02g" $start $end); do
+    names+=("${gen_name}${i}")
+done
+
+# Calculate dynamic timeout
+timeout=$((420 + (amount * timeout_sleep)))
+
+# Function to handle cleanup on Ctrl+C
+cleanup() {
+    for pid in "${create_instances_pids[@]}"; do
+        kill "$pid" >/dev/null 2>&1
+    done
+
+    # Kill the timer process if it exists
+    if [[ -n "$timer_pid" ]]; then
+        kill "$timer_pid" >/dev/null 2>&1
+        wait "$timer_pid" 2>/dev/null
+    fi
+
+    exit 1
+}
+
+trap cleanup SIGINT
+
+###########################################################################################################
+# Fleet Initialization
+# Use region from axiom.json or parse the regions from user argument, separated by commas
+#
+IFS=',' read -r -a regions_array <<< "$regions"
+
+# Remove duplicate regions
+unique_regions=($(echo "${regions_array[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' '))
+
+# Transfer DO image if needed (DO only)
+region_transfer
+
+# Initialize variables
+num_regions=${#unique_regions[@]}
+num_names=${#names[@]}
+
+# Create temporary files to store instance names per region
+temp_dir=$(mktemp -d)
+for region in "${unique_regions[@]}"; do
+    touch "$temp_dir/$region"
+done
+
+# Distribute names evenly across regions
+for ((i = 0; i < num_names; i++)); do
+    region_index=$((i % num_regions))
+    region=${unique_regions[$region_index]}
+    echo "${names[$i]}" >> "$temp_dir/$region"
+done
+
+echo -e "${BWhite}Initializing new fleet '${BGreen}$gen_name${BWhite}' with '${BGreen}$amount${BWhite}' instances in regions '${BGreen}${unique_regions[@]}${BWhite}' using image '${BGreen}$image${Color_Off}'...${Color_Off}"
+echo -e "${BWhite}INITIALIZING IN 5 SECONDS, CTRL+C to quit... ${Color_Off}"
+sleep 5
+
+# Display instance names
+echo -n -e "${BWhite}Instances: ${Color_Off}[ "
+for name in "${names[@]}"; do
+    echo -n -e "${BGreen}${name} ${Color_Off}"
+done
+echo -e "]"
+
+# Start a countdown timer in a background process
+(
+    secs=$timeout  # Dynamic timeout based on the number of instances
+    while [ $secs -gt 0 ]; do
+        echo -ne "${BWhite}>> T-Minus $secs to full initialization...${Color_Off}\r"
+        sleep 1
+        : $((secs--))
+    done
+    echo -e "\n${BRed}Timeout reached. Some instances may not be ready.${Color_Off}"
+    kill "$create_instances_pids" 2>/dev/null  # Kill the ongoing processes if timeout reached
+) &
+timer_pid=$!
+
+# Print the distribution and create instances
+for region in "${unique_regions[@]}"; do
+    # Read names for this region into an array
+    readarray -t region_names < "$temp_dir/$region"
+
+    # Only create instances if we have names for this region
+    if [ ${#region_names[@]} -gt 0 ]; then
+        # Pass the arguments and names to create_instances
+        create_instances "$image_id" "$default_size" "$region" "$user_data" "$timeout" "${region_names[@]}" &
+        create_instances_pids+=($!)  # Store the PID of this process
+    fi
+done
+
+# Clean up temp directory
+rm -rf "$temp_dir"
+
+# Wait for all create_instances processes to complete simultaneously
+wait "${create_instances_pids[@]}"
+
+# Kill the timer when `create_instances` finishes
+kill "$timer_pid" >/dev/null 2>&1
+wait "$timer_pid" 2>/dev/null || true  # Ignore errors from already terminated time
+
+# Select the instances
+"$AXIOM_PATH"/interact/axiom-select "${names[@]}"
+echo -e "${BGreen}Fleet started successfully. Use 'axiom-rm "$gen_name*" -f' to delete.${Color_Off}"

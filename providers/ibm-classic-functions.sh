@@ -372,3 +372,85 @@ delete_instances() {
 # wait until all background jobs are finished deleting
 wait
 }
+
+###################################################################
+# experimental v2 function
+# create multiple instances at the same time
+# used by axiom-fleet
+#
+create_instances() {
+    image_id="$1"
+    size="$2"
+    region="$3"
+    user_data="$4"
+    timeout="$5"
+    shift 5
+    names=("$@")  # Remaining arguments are instance names
+
+    domain="ax.private"
+    cpu="$(jq -r '.cpu' $AXIOM_PATH/axiom.json)"
+    count="${#names[@]}"
+    sleep 5
+
+    # Create temporary base hostname
+    base_hostname="axiom-temp-$(date +%s)"
+
+    # Create multiple instances in one command and capture the output in JSON
+    instance_data=$(ibmcloud sl vs create -H "$base_hostname" -D "$domain" -c "$cpu" -m "$size" -n 1000 -d "$region" --image "$image_id" --userdata "$user_data" --quantity "$count" -f)
+
+    # Extract instance IDs from the creation response
+    instance_ids=($(echo "$instance_data" | grep $base_hostname | awk '{print $1}'))
+
+    # Verify we got the expected number of instances
+    if [ "${#instance_ids[@]}" -ne "$count" ]; then
+        echo "Error: Expected $count instances but got ${#instance_ids[@]}"
+        return 1
+    fi
+
+    processed_file=$(mktemp)
+    interval=10   # Time between status checks
+    elapsed=0
+
+    # Monitor instance status and rename instances-output JSON
+    while [ "$elapsed" -lt "$timeout" ]; do
+        all_ready=true
+        current_statuses=$(ibmcloud sl vs list --column id --column public_ip --column power_state --output JSON)
+
+        for i in "${!instance_ids[@]}"; do
+            id="${instance_ids[$i]}"
+            new_name="${names[$i]}"
+
+            # Get instance details
+            instance_data=$(echo "$current_statuses" | jq -r ".[] | select(.id==$id)")
+            state=$(echo "$instance_data" | jq -r '.powerState.name // empty')
+            ip=$(echo "$instance_data" | jq -r '.primaryIpAddress // "N/A"')
+
+            if [[ "$state" == "Running" ]]; then
+                # Rename the instance if we haven't already
+                if ! grep -q "^$new_name\$" "$processed_file"; then
+                    ibmcloud sl vs edit "$id" --hostname "$new_name" 2>&1 >>/dev/null
+                    echo "$new_name" >> "$processed_file"
+                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$new_name${Color_Off}${BWhite}' at IP '${BGreen}${ip}${BWhite}'!"
+                fi
+            else
+                # If any instance is not ACTIVE, we must keep waitingreson
+                all_ready=false
+            fi
+        done
+
+        # If all instances are running and renamed, we're done
+        if $all_ready; then
+            rm -f "$processed_file"
+            sleep 30
+            return 0
+        fi
+
+        # Otherwise, sleep and increment elapsed
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    # If we get here, not all instances became active before timeout
+    rm -f "$processed_file"
+    return 1
+}

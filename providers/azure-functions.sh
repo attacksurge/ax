@@ -73,12 +73,12 @@ instance_pretty() {
 	echo '"Instance","IP","Size","Region","Status","$M"'
 
 
-	echo "$data" | jq -c '.[] | select(.type=="Microsoft.Compute/virtualMachines")' | while IFS= read -r instance;
+	echo "$data" | jq -c '.[]? | select(.type=="Microsoft.Compute/virtualMachines")' | while IFS= read -r instance;
 	do
-		name=$(echo $instance | jq -r '.name')
-		size=$(echo $instance | jq -r ". | select(.name==\"$name\") | .hardwareProfile.vmSize")
-		region=$(echo $instance | jq -r ". | select(.name==\"$name\") | .location")
-                power=$(echo $instance | jq -r ". | select(.name==\"$name\") | .powerState")
+		name=$(echo $instance | jq -r '.name?')
+		size=$(echo $instance | jq -r ". | select(.name==\"$name\") | .hardwareProfile?.vmSize?")
+		region=$(echo $instance | jq -r ". | select(.name==\"$name\") | .location?")
+                power=$(echo $instance | jq -r ". | select(.name==\"$name\") | .powerState?")
 
 		csv_data=$(echo $instance | jq ".size=\"$size\"" | jq ".region=\"$region\"" | jq ".powerState=\"$power\"")
 		echo $csv_data | jq -r '[.name, .publicIps, .size, .region, .powerState] | @csv'
@@ -378,5 +378,230 @@ delete_instances() {
         az resource delete --ids $confirmed_resource_ids --no-wait
     else
         echo "No resources were selected for deletion."
+    fi
+}
+
+###################################################################
+# experimental v2 function
+# create multiple instances at the same time
+# used by axiom-fleet
+#
+create_instances() {
+    image_id="$1"
+    size="$2"
+    region="$3"
+    user_data="$4"
+    timeout="$5"
+    shift 5
+    names=("$@")
+
+    # Get SSH key from config
+    sshkey="$(jq -r '.sshkey' "$AXIOM_PATH/axiom.json")"
+
+    # temp files
+    creation_status_file=$(mktemp)
+    created_vms_file=$(mktemp)
+    monitored_vms_file=$(mktemp)
+    touch "$creation_status_file" "$created_vms_file" "$monitored_vms_file"
+
+    interval=8
+    elapsed=0
+    batch_size=20
+
+    total_instances=${#names[@]}
+
+    # Start creation in batches, in the background
+    pids_data=()  # Will hold "pid:vmName"
+    for ((i=0; i<total_instances; i+=batch_size)); do
+        end=$((i + batch_size))
+        [ $end -gt $total_instances ] && end=$total_instances
+
+        # Launch this batch in the background
+        for ((j=i; j<end; j++)); do
+            name="${names[j]}"
+            (
+                # Attempt creation
+                if output=$(az vm create \
+                    --resource-group "$resource_group" \
+                    --name "$name" \
+                    --image "$image_id" \
+                    --location "$region" \
+                    --size "$size" \
+                    --tags "$name"=True \
+                    --os-disk-delete-option delete \
+                    --data-disk-delete-option delete \
+                    --nic-delete-option delete \
+                    --admin-username op \
+                    --ssh-key-values "$HOME/.ssh/$sshkey.pub" \
+                    2>&1); then
+
+                    # If creation succeeded, open ports
+                    az vm open-port \
+                        --resource-group "$resource_group" \
+                        --name "$name" \
+                        --port 0-65535 \
+                        >/dev/null 2>&1
+
+                    echo "$name:success" >> "$creation_status_file"
+                else
+                    # Creation failed
+                    echo "$name:failed:$output" >> "$creation_status_file"
+                fi
+            ) &
+            pid=$!
+            pids_data+=( "$pid:$name" )
+
+            # Throttle every 10 VMs
+            if (((j-i+1) % 10 == 0)); then
+                sleep 20
+            fi
+        done
+    done
+
+    # Check for completed creation processes
+    # Monitor readiness (running + IP) for successfully created VMs
+    while [ "$elapsed" -lt "$timeout" ]; do
+        new_pids_data=()
+        for entry in "${pids_data[@]}"; do
+            pid="${entry%%:*}"
+            vm="${entry##*:}"
+
+            if kill -0 "$pid" 2>/dev/null; then
+                # This process is still running
+                new_pids_data+=( "$entry" )
+            else
+                # Process finished; fetch exit status
+                wait "$pid"
+                # The real success/failure is in creation_status_file (written by the subshell)
+            fi
+        done
+        # Update with only the still-running processes
+        pids_data=( "${new_pids_data[@]}" )
+
+        #Process any new lines in creation_status_file
+        while IFS=: read -r vmName status msg; do
+            # Skip lines we’ve already processed
+            if grep -q "^$vmName\$" "$created_vms_file" 2>/dev/null || \
+               grep -q "^$vmName\$" "$monitored_vms_file" 2>/dev/null; then
+                continue
+            fi
+
+            if [[ "$status" == "success" ]]; then
+                # Mark as created
+                echo "$vmName" >> "$created_vms_file"
+            else
+                # Mark as failed and print error
+                >&2 echo -e "${BRed}Failed to create instance '$vmName': ${msg}${Color_Off}"
+                # No need to monitor a failed instance
+                echo "$vmName" >> "$monitored_vms_file"
+            fi
+        done < "$creation_status_file"
+
+        # Gather list of all created (but not fully monitored) VMs
+        created_but_not_monitored=()
+        while read -r vmName; do
+            # If we haven't monitored it yet, we add it
+            if ! grep -q "^$vmName\$" "$monitored_vms_file" 2>/dev/null; then
+                created_but_not_monitored+=( "$vmName" )
+            fi
+        done < "$created_vms_file"
+
+        # If there are any created VMs, fetch statuses in one call
+        if [ ${#created_but_not_monitored[@]} -gt 0 ]; then
+            current_statuses=$(az vm list \
+                --resource-group "$resource_group" \
+                --show-details \
+                --query "[].{name:name,powerState:powerState,publicIps:publicIps}" \
+                -o json)
+
+            for vmName in "${created_but_not_monitored[@]}"; do
+                instance_data=$(echo "$current_statuses" | \
+                    jq -r ".[] | select(.name==\"$vmName\")")
+                state=$(echo "$instance_data" | jq -r '.powerState // empty')
+                ip=$(echo "$instance_data" | jq -r '.publicIps // empty')
+
+                if [[ "$state" == "VM running" && -n "$ip" ]]; then
+                    # Mark as fully initialized
+                    echo "$vmName" >> "$monitored_vms_file"
+                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$vmName${Color_Off}${BWhite}' at IP '${BGreen}${ip}${BWhite}'!${Color_Off}"
+                fi
+            done
+        fi
+
+        # Check if all instances have finished creation
+        creation_done=false
+        [ ${#pids_data[@]} -eq 0 ] && creation_done=true
+
+        # Count how many are either in monitored_vms_file or appeared as "failed"
+        fail_count=$(grep ":failed:" "$creation_status_file" | cut -d: -f1 | sort -u | wc -l)
+        monitored_count=$(cat "$monitored_vms_file" 2>/dev/null | sort -u | wc -l)
+        total_handled=$(( fail_count + monitored_count ))
+
+        # If we've handled all
+        if $creation_done && [ "$total_handled" -eq "$total_instances" ]; then
+            break
+        fi
+
+        # Sleep for next loop iteration
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    # If still have running processes after timeout, kill them
+    if [ "$elapsed" -ge "$timeout" ] && [ ${#pids_data[@]} -gt 0 ]; then
+        >&2 echo -e "${BRed}Error: Timeout reached ($elapsed s) before all instances were created.${Color_Off}"
+        for entry in "${pids_data[@]}"; do
+            pid="${entry%%:*}"
+            vm="${entry##*:}"
+            kill "$pid" 2>/dev/null
+            wait "$pid" 2>/dev/null
+            >&2 echo -e "${BRed}Killed remaining creation process for instance '$vm' (PID: $pid).${Color_Off}"
+        done
+    fi
+
+    # Final outcome checks
+    # Count how many actually succeeded creation
+    success_list=()
+    while IFS=: read -r vmName status msg; do
+        if [[ "$status" == "success" ]]; then
+            success_list+=( "$vmName" )
+        fi
+    done < "$creation_status_file"
+    success_count=${#success_list[@]}
+
+    # Count how many failed creation
+    fail_list=()
+    while IFS=: read -r vmName status msg; do
+        if [[ "$status" == "failed" ]]; then
+            fail_list+=( "$vmName" )
+        fi
+    done < "$creation_status_file"
+    fail_count=${#fail_list[@]}
+
+    # If all failed creation
+    if [ "$fail_count" -eq "$total_instances" ]; then
+        >&2 echo -e "${BRed}Error: All $total_instances instances failed creation.${Color_Off}"
+        rm -f "$creation_status_file" "$created_vms_file" "$monitored_vms_file"
+        return 1
+    fi
+
+    # If some failed, but some succeeded
+    if [ "$fail_count" -gt 0 ]; then
+        >&2 echo -e "${BRed}Warning: $fail_count instances failed creation, $success_count succeeded.${Color_Off}"
+    fi
+
+    # Check how many have been fully monitored (running + IP)
+    fully_initialized=$(cat "$monitored_vms_file" 2>/dev/null | sort -u | wc -l)
+
+    # Final message
+    if [ "$fully_initialized" -eq "$success_count" ]; then
+        echo -e "${BGreen}Success: All $fully_initialized successfully-created instances became ready!${Color_Off}"
+        rm -f "$creation_status_file" "$created_vms_file" "$monitored_vms_file"
+        return 0
+    else
+        # Some succeeded but never reached "running + IP"
+        >&2 echo -e "${BRed}Error: Timeout or incomplete readiness. $fully_initialized of $success_count successful VMs are ready.${Color_Off}"
+        rm -f "$creation_status_file" "$created_vms_file" "$monitored_vms_file"
+        return 1
     fi
 }

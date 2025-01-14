@@ -356,3 +356,107 @@ delete_instances() {
     # wait for all background jobs to complete
     wait
 }
+
+###################################################################
+# optimized v2 function for Linode
+# create multiple instances concurrently and monitor their statuses
+# used by axiom-fleet
+#
+create_instances() {
+    image_id="$1"
+    size="$2"
+    region="$3"
+    user_data="$4"
+    timeout="$5"
+    shift 5
+    names=("$@")  # Remaining arguments are instance names
+
+    root_pass="$(jq -r .op "$AXIOM_PATH/axiom.json")"
+
+    # Encode user data as Base64
+    user_data_base64=$(mktemp)
+    echo "$user_data" | base64 | tr -d '\n' > "$user_data_base64"
+
+    # Track instance IDs and names
+    instance_ids=()
+    instance_names=("${names[@]}")
+
+    # Define how many instances to launch at a time and the wait period
+    batch_size=4
+    batch_sleep=15
+    count=0
+
+    # Create instances in batches of 'batch_size'
+    for name in "${names[@]}"; do
+        linode_id=$(linode-cli linodes create \
+            --type "$size" \
+            --region "$region" \
+            --image "$image_id" \
+            --label "$name" \
+            --root_pass "$root_pass" \
+            --private_ip true \
+            --metadata.user_data "$(cat "$user_data_base64")" \
+            --format id \
+            --no-header 2>/dev/null \
+            --text )
+
+        if [ -n "$linode_id" ]; then
+            instance_ids+=("$linode_id")
+        else
+            >&2 echo "Error creating instance: $name"
+        fi
+
+        # After every 'batch_size' creations, wait before creating the next batch
+        (( count++ ))
+        if (( count % batch_size == 0 )); then
+            sleep "$batch_sleep"
+        fi
+    done
+
+    # Clean up temporary file
+    rm -f "$user_data_base64"
+
+    # Monitor instance statuses
+    processed_file=$(mktemp)
+    interval=8   # Time between status checks
+    elapsed=0
+
+    while [ "$elapsed" -lt "$timeout" ]; do
+        all_ready=true
+
+        # Fetch current Linode data
+        current_statuses=$(linode-cli linodes list --format id,label,status,ipv4 --no-header --text)
+
+        for i in "${!instance_ids[@]}"; do
+            id="${instance_ids[$i]}"
+            name="${instance_names[$i]}"
+
+            # Extract status and IP
+            status=$(echo "$current_statuses" | awk -v id="$id" '$1 == id {print $3}')
+            ip=$(echo "$current_statuses" | awk -v id="$id" '$1 == id {print $4}')
+
+            if [[ "$status" == "running" ]]; then
+                # Only announce once per instance
+                if ! grep -q "^$name\$" "$processed_file"; then
+                    echo "$name" >> "$processed_file"
+                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!"
+                fi
+            else
+                all_ready=false
+            fi
+        done
+
+        # If all instances are running, we're done
+        if $all_ready; then
+            rm -f "$processed_file"
+            return 0
+        fi
+
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    # If we exit the loop, timeout was reached without all instances running
+    rm -f "$processed_file"
+    return 1
+}

@@ -2,6 +2,7 @@
 
 AXIOM_PATH="$HOME/.axiom"
 
+
 ###################################################################
 #  Create Instance is likely the most important provider function :)
 #  needed for init and fleet
@@ -12,17 +13,37 @@ create_instance() {
     size="$3"
     region="$4"
     user_data="$5"
+    security_group_name="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_name')"
     security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
 
-    aws ec2 run-instances \
+    # Determine whether to use security_group_name or security_group_id
+    if [[ -n "$security_group_name" && "$security_group_name" != "null" ]]; then
+        security_group_option="--security-groups $security_group_name"
+    elif [[ -n "$security_group_id" && "$security_group_id" != "null" ]]; then
+        security_group_option="--security-group-ids $security_group_id"
+    else
+        echo "Error: Both security_group_name and security_group_id are missing or invalid in axiom.json."
+        return 1
+    fi
+
+    # Launch the instance using the determined security group option
+    eval aws ec2 run-instances \
         --image-id "$image_id" \
         --count 1 \
         --instance-type "$size" \
         --region "$region" \
-        --security-group-ids "$security_group_id" \
+        $security_group_option \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" \
         --user-data "$user_data" 2>&1 >> /dev/null
 
+    if [[ $? -eq 0 ]]; then
+        echo "Instance '$name' launched successfully in region '$region'."
+    else
+        echo "Error: Failed to launch instance '$name' in region '$region'."
+        return 1
+    fi
+
+    # Allow time for instance initialization if needed
     sleep 260
 }
 
@@ -394,4 +415,123 @@ delete_instances() {
             aws ec2 terminate-instances --instance-ids "${confirmed_instance_ids[@]}" >/dev/null 2>&1
         fi
     fi
+}
+
+###################################################################
+# experimental v2 function
+# create multiple instances at the same time
+# used by axiom-fleet
+#
+create_instances() {
+    image_id="$1"
+    size="$2"
+    region="$3"
+    user_data="$4"
+    timeout="$5"
+    shift 5
+    names=("$@")  # Remaining arguments are instance names
+
+    security_group_name="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_name')"
+    security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
+
+    # Determine whether to use security_group_name or security_group_id
+    if [[ -n "$security_group_name" && "$security_group_name" != "null" ]]; then
+        security_group_option="--security-groups $security_group_name"
+    elif [[ -n "$security_group_id" && "$security_group_id" != "null" ]]; then
+        security_group_option="--security-group-ids $security_group_id"
+    else
+        echo "Error: Both security_group_name and security_group_id are missing or invalid in axiom.json."
+        return 1
+    fi
+
+    count="${#names[@]}"
+
+    # Create instances in one API call and capture output
+    instance_data=$( aws ec2 run-instances \
+        --image-id "$image_id" \
+        --count "$count" \
+        --instance-type "$size" \
+        --region "$region" \
+        $security_group_option \
+        --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" \
+        --user-data "$user_data")
+
+    instance_ids=($(echo "$instance_data" | jq -r '.Instances[].InstanceId'))
+
+    instance_names=()
+    for i in "${!instance_ids[@]}"; do
+        instance_names+=( "${names[$i]}" )
+    done
+
+    sleep 5
+
+    # Iterate over the array of instance IDs and rename them in parallel
+    for i in "${!instance_ids[@]}"; do
+        instance_id="${instance_ids[$i]}"
+        instance_name="${names[$i]}"
+
+        # Use create-tags to set the Name tag
+        aws ec2 create-tags \
+           --resources "$instance_id" \
+           --tags Key=Name,Value="$instance_name" &
+
+        # Pause every 20 requests for background tasks to complete
+        if (( (i+1) % 20 == 0 )); then
+           wait
+        fi
+    done
+
+    # After the loop, wait for any remaining background jobs
+    wait
+
+    processed_file=$(mktemp)
+
+    interval=8   # Time between status checks
+    elapsed=0
+
+    while [ "$elapsed" -lt "$timeout" ]; do
+        all_ready=true
+        current_statuses=$(
+            aws ec2 describe-instances \
+                --instance-ids "${instance_ids[@]}" \
+                --region "$region" \
+                --query 'Reservations[].Instances[].{Id:InstanceId,State:State.Name,PublicIp:PublicIpAddress}' \
+                --output json
+        )
+        for i in "${!instance_ids[@]}"; do
+            id="${instance_ids[$i]}"
+            name="${instance_names[$i]}"
+
+            # Parse the state and IP from the single JSON array
+            state=$(jq -r --arg id "$id" '.[] | select(.Id == $id) | .State' <<< "$current_statuses")
+            ip=$(jq -r --arg id "$id" '.[] | select(.Id == $id) | .PublicIp' <<< "$current_statuses")
+
+            if [[ "$state" == "running" ]]; then
+                # If we haven't printed a success message yet, do it now
+                if ! grep -q "^$name\$" "$processed_file"; then
+                    echo "$name" >> "$processed_file"
+                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at IP '${BGreen}${ip:-"N/A"}${BWhite}'!"
+                fi
+            else
+                # If any instance is not in "running", we must keep waiting
+                all_ready=false
+            fi
+        done
+
+       # If all instances are running, we're done
+       if $all_ready; then
+           rm -f "$processed_file"
+           sleep 30
+           return 0
+       fi
+
+       # Otherwise, sleep and increment elapsed
+       sleep "$interval"
+       elapsed=$((elapsed + interval))
+
+    done
+
+    # If we get here, not all instances became running before timeout
+    rm -f "$processed_file"
+    return 1
 }

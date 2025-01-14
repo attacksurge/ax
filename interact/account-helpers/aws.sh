@@ -87,7 +87,7 @@ function awssetup(){
 echo -e -n "${Green}Please enter your AWS Access Key ID (required): \n>> ${Color_Off}"
 read ACCESS_KEY
 while [[ "$ACCESS_KEY" == "" ]]; do
-	echo -e "${BRed}Please provide a AWS Access KEY ID, your entry contained no input.${Color_Off}"
+	echo -e "${BRed}Please provide an AWS Access KEY ID, your entry contained no input.${Color_Off}"
 	echo -e -n "${Green}Please enter your token (required): \n>> ${Color_Off}"
 	read ACCESS_KEY
 done
@@ -95,7 +95,7 @@ done
 echo -e -n "${Green}Please enter your AWS Secret Access Key (required): \n>> ${Color_Off}"
 read SECRET_KEY
 while [[ "$SECRET_KEY" == "" ]]; do
-	echo -e "${BRed}Please provide a AWS Secret Access Key, your entry contained no input.${Color_Off}"
+	echo -e "${BRed}Please provide an AWS Secret Access Key, your entry contained no input.${Color_Off}"
 	echo -e -n "${Green}Please enter your token (required): \n>> ${Color_Off}"
 	read SECRET_KEY
 done
@@ -122,52 +122,111 @@ aws configure set default.region "$region"
 
 # Print available security groups
 echo -e "${BGreen}Printing Available Security Groups:${Color_Off}"
-(echo -e "GroupName\tGroupId\tOwnerId\tVpcId\tFromPort\tToPort" && aws ec2 describe-security-groups --query 'SecurityGroups[*].{GroupName:GroupName,GroupId:GroupId,OwnerId:OwnerId,VpcId:VpcId,FromPort:IpPermissions[0].FromPort,ToPort:IpPermissions[0].ToPort}' --output json | jq -r '.[] | [.GroupName, .GroupId, .OwnerId, .VpcId, .FromPort, .ToPort] | @tsv') | column -t
+(
+  echo -e "GroupName\tGroupId\tOwnerId\tVpcId\tFromPort\tToPort"
+  aws ec2 describe-security-groups \
+    --query 'SecurityGroups[*].{GroupName:GroupName,GroupId:GroupId,OwnerId:OwnerId,VpcId:VpcId,FromPort:IpPermissions[0].FromPort,ToPort:IpPermissions[0].ToPort}' \
+    --output json | jq -r '.[] | [.GroupName, .GroupId, .OwnerId, .VpcId, .FromPort, .ToPort] | @tsv'
+) | column -t
 
 # Prompt user to enter a security group name
 echo -e -n "${Green}Please enter a security group name above or press enter to create a new security group with a random name \n>> ${Color_Off}"
 read SECURITY_GROUP
 
-# If no security group name is provided, create a new one with a random name
+# Get all available AWS regions
+all_regions=$(aws ec2 describe-regions --query "Regions[].RegionName" --output text)
+
+echo -e "${BGreen}Creating or reusing the security group '$SECURITY_GROUP' in ALL AWS regions...${Color_Off}"
+
+# We will track the "last" group_id and group_owner_id found or created
+# so the script can still store them as before.
+last_group_id=""
+group_owner_id=""
+
+# If no security group name is provided, generate one (same name will be used in all regions)
 if [[ "$SECURITY_GROUP" == "" ]]; then
   axiom_sg_random="axiom-$(date +%m-%d_%H-%M-%S-%1N)"
   SECURITY_GROUP=$axiom_sg_random
-  echo -e "${BGreen}Creating an Axiom Security Group: ${Color_Off}"
-  aws ec2 delete-security-group --group-name "$SECURITY_GROUP" > /dev/null 2>&1
-  sc=$(aws ec2 create-security-group --group-name "$SECURITY_GROUP" --description "Axiom SG")
-  group_id=$(echo "$sc" | jq -r '.GroupId')
-  echo -e "${BGreen}Created Security Group: $group_id ${Color_Off}"
-else
-  # Use the existing security group
-  echo -e "${BGreen}Using Security Group: $SECURITY_GROUP ${Color_Off}"
-  group_id=$(aws ec2 describe-security-groups --filters "Name=group-name,Values=$SECURITY_GROUP" --query "SecurityGroups[*].GroupId" --output text)
+  echo -e "${BGreen}No Security Group provided, will create a new one: '$SECURITY_GROUP' in each region.${Color_Off}"
+fi
 
-  if [ -z "$group_id" ]; then
-    echo -e "${BGreen}Security Group '$SECURITY_GROUP' not found. Exiting.${Color_Off}"
-    exit 1
+for r in $all_regions; do
+  echo -e "\n${BGreen}--- Region: $r ---${Color_Off}"
+
+  # Check if the security group already exists in this region
+  existing_group_id=$(aws ec2 describe-security-groups \
+    --filters "Name=group-name,Values=$SECURITY_GROUP" \
+    --region "$r" \
+    --query "SecurityGroups[*].GroupId" \
+    --output text 2>/dev/null)
+
+  if [[ "$existing_group_id" == "None" ]] || [[ -z "$existing_group_id" ]]; then
+    # Create the security group in this region
+    echo -e "${BGreen}Creating Security Group '$SECURITY_GROUP' in region $r...${Color_Off}"
+    create_output=$(aws ec2 create-security-group \
+      --group-name "$SECURITY_GROUP" \
+      --description "Axiom SG" \
+      --region "$r" 2>&1)
+
+    # If creation failed for any reason, log and continue to next region
+    if [[ $? -ne 0 ]]; then
+      echo -e "${BRed}Failed to create security group in region $r: $create_output${Color_Off}"
+      continue
+    fi
+
+    new_group_id=$(echo "$create_output" | jq -r '.GroupId' 2>/dev/null)
+    if [[ "$new_group_id" == "null" ]]; then
+      echo -e "${BRed}Could not parse GroupId from creation output. Raw output:\n$create_output${Color_Off}"
+      continue
+    fi
+
+    echo -e "${BGreen}Created Security Group: $new_group_id in region $r${Color_Off}"
+    last_group_id="$new_group_id"
+  else
+    echo -e "${BGreen}Security Group '$SECURITY_GROUP' already exists in region $r (GroupId: $existing_group_id).${Color_Off}"
+    last_group_id="$existing_group_id"
   fi
-fi
 
-# Attempt to add the rule
-group_rules=$(aws ec2 authorize-security-group-ingress --group-id "$group_id" --protocol tcp --port 2266 --cidr 0.0.0.0/0 2>&1)
+  # Attempt to add the rule (port 2266 for 0.0.0.0/0)
+  # If it already exists, AWS will throw an error that we can catch
+group_rules=$(aws ec2 authorize-security-group-ingress \
+  --group-id "$last_group_id" \
+  --protocol tcp \
+  --port 2266 \
+  --cidr 0.0.0.0/0 \
+  --region "$r" 2>&1
+)
+cmd_exit_status=$?
 
-# Check if the rule already exists
-if echo "$group_rules" | grep -q "InvalidPermission.Duplicate"; then
-  echo -e "${BGreen}The rule already exists for Security Group ID: $group_id ${Color_Off}"
-
-  group_owner_id=$(aws ec2 describe-security-groups --group-ids "$group_id" --query "SecurityGroups[*].OwnerId" --output text)
-  echo -e "${BGreen}GroupOwnerId: $group_owner_id, GroupId: $group_id ${Color_Off}"
+if [[ $cmd_exit_status -ne 0 ]]; then
+    # If AWS CLI returned an error code (non-zero), check if it's a duplicate rule
+    if echo "$group_rules" | grep -q "InvalidPermission.Duplicate"; then
+        echo -e "${BGreen}Ingress rule already exists in region $r.${Color_Off}"
+    else
+        echo -e "${BRed}Failed to add rule in region $r: $group_rules${Color_Off}"
+    fi
 else
-  echo -e "${BGreen}Rule added successfully to Security Group: $group_id ${Color_Off}"
-
-  group_owner_id=$(aws ec2 describe-security-groups --group-ids "$group_id" --query "SecurityGroups[*].OwnerId" --output text)
-  echo -e "${BGreen}GroupOwnerId: $group_owner_id, GroupId: $group_id ${Color_Off}"
+    # If $cmd_exit_status == 0, AWS CLI succeeded.
+    # Even though you get output JSON, "Return": true means success.
+    echo -e "${BGreen}Rule added successfully in region $r. Output:\n$group_rules${Color_Off}"
 fi
 
-data="$(echo "{\"aws_access_key\":\"$ACCESS_KEY\",\"aws_secret_access_key\":\"$SECRET_KEY\",\"group_owner_id\":\"$group_owner_id\",\"security_group_id\":\"$group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\"}")"
+  # Fetch the owner ID for the newly found/created security group
+  owner_id=$(aws ec2 describe-security-groups \
+    --group-ids "$last_group_id" \
+    --region "$r" \
+    --query "SecurityGroups[*].OwnerId" \
+    --output text 2>/dev/null)
+
+  # We'll overwrite group_owner_id each time so that, after the last region,
+  # we hold the last known group_owner_id. Typically, it's the same account ID.
+  group_owner_id="$owner_id"
+done
+
+data="$(echo "{\"aws_access_key\":\"$ACCESS_KEY\",\"aws_secret_access_key\":\"$SECRET_KEY\",\"group_owner_id\":\"$group_owner_id\",\"security_group_name\":\"$SECURITY_GROUP\",\"security_group_id\":\"$last_group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\"}")"
 
 echo -e "${BGreen}Profile settings below: ${Color_Off}"
-echo $data | jq '.aws_secret_access_key = "*************************************"'
+echo "$data" | jq '.aws_secret_access_key = "*************************************"'
 echo -e "${BWhite}Press enter if you want to save these to a new profile, type 'r' if you wish to start again.${Color_Off}"
 read ans
 
@@ -185,10 +244,11 @@ if [[ "$title" == "" ]]; then
     echo -e "${BGreen}Named profile 'aws'${Color_Off}"
 fi
 
-echo $data | jq > "$AXIOM_PATH/accounts/$title.json"
+echo "$data" | jq > "$AXIOM_PATH/accounts/$title.json"
 echo -e "${BGreen}Saved profile '$title' successfully!${Color_Off}"
-$AXIOM_PATH/interact/axiom-account $title
+$AXIOM_PATH/interact/axiom-account "$title"
 
 }
 
 awssetup
+

@@ -459,3 +459,110 @@ delete_instances() {
         fi
     fi
 }
+
+###################################################################
+# experimental v2 function
+# create multiple instances at the same time
+# used by axiom-fleet
+#
+create_instances() {
+    image_id="$1"
+    profile="$2"
+    region="$3"
+    user_data="$4"
+    timeout="$5"
+    shift 5
+    names=("$@")  # Remaining arguments are instance names
+
+    # Get required config values
+    vpc="$(jq -r '.vpc' "$AXIOM_PATH"/axiom.json)"
+    security_group_name="$(jq -r '.security_group' "$AXIOM_PATH"/axiom.json)"
+
+    # Create temporary user data file
+    user_data_file=$(mktemp)
+    echo "$user_data" > "$user_data_file"
+
+    # Create a temporary file to track processed instances
+    processed_file=$(mktemp)
+    interval=8   # Time between status checks
+    elapsed=0
+
+   # Store created instance names
+   created_instances=()
+
+    # Create instances in parallel
+    for name in "${names[@]}"; do
+        # Create instance with network interface
+        (ibmcloud is instance-create "$name" "$vpc" "$region" "$profile" "$vpc-subnet-$region" \
+            --image "$image_id" \
+            --pnac-vni-name "$name"-vni \
+            --pnac-name "$name"-pnac \
+            --pnac-vni-sgs "$security_group_name" \
+            --user-data @"$user_data_file" \
+            >/dev/null && \
+        # Reserve and attach floating IP in parallel
+        ibmcloud is floating-ip-reserve "$name"-ip \
+            --vni "$name"-vni \
+            --in "$name" \
+            >/dev/null)
+
+        if [ $? -eq 0 ]; then
+            created_instances+=("$name")
+        else
+            >&2 echo -e "${BRed}Error creating instance '$name': $output${Color_Off}"
+        fi
+
+    done
+
+    # Wait for background jobs to complete
+    wait
+
+    # Monitor instance statuses
+    while [ "$elapsed" -lt "$timeout" ]; do
+        all_ready=true
+
+        # Get current status of all instances in one call
+        current_statuses=$(ibmcloud is instances --output json)
+
+        for name in "${created_instances[@]}"; do
+            # Get instance details
+            instance_data=$(echo "$current_statuses" | jq -r ".[] | select(.name==\"$name\")")
+            state=$(echo "$instance_data" | jq -r '.status // empty')
+
+            # Get floating IP
+            ip=$(echo "$instance_data" | jq -r '(
+                [
+                    .primary_network_attachment?.virtual_network_interface?.floating_ips[0]?.address,
+                    .network_interfaces[]?.floating_ips[]?.address
+                ] | map(select(. != null and . != "")) | .[0] // ""
+            )')
+
+            if [[ "$state" == "running" ]]; then
+                # Only announce once per instance
+                if ! grep -q "^$name\$" "$processed_file"; then
+                    echo "$name" >> "$processed_file"
+                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at IP '${BGreen}${ip}${BWhite}'!"
+                fi
+            else
+                all_ready=false
+            fi
+        done
+
+        # If all instances are running, we're done
+        if $all_ready; then
+            rm -f "$processed_file" "$user_data_file"
+            sleep 30
+            return 0
+        fi
+
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    # Clean up temporary files
+    rm -f "$processed_file" "$user_data_file"
+
+    # If we get here, timeout was reached
+    >&2 echo -e "${BRed}Error: Timeout reached before all instances became ready.${Color_Off}"
+    return 1
+}

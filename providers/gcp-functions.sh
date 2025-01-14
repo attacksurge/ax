@@ -400,3 +400,115 @@ delete_instances() {
     # wait until all background jobs are finished deleting
     wait
 }
+
+###################################################################
+# experimental v2 function
+# create multiple instances at the same time
+# used by axiom-fleet
+#
+create_instances() {
+    image_id="$1"
+    machine_type="$2"
+    zone="$3"
+    user_data="$4"
+    timeout="$5"
+    shift 5
+    names=("$@")  # Remaining arguments are instance names
+
+    # Track instance creation statuses
+    instance_statuses=()
+    instance_ips=()
+
+    # Temporary file for capturing gcloud output
+    create_output_file=$(mktemp)
+
+    # Run the gcloud create command in "none" format so "Created [...]" lines appear
+    gcloud compute instances create "${names[@]}" \
+        --image "$image_id" \
+        --machine-type "$machine_type" \
+        --zone "$zone" \
+        --tags "axiom-ssh" \
+        --metadata=user-data="$user_data" \
+        --verbosity=error \
+        --quiet \
+        --format=none \
+        >"$create_output_file" 2>&1
+
+    created_names_file=$(mktemp)
+    grep '^Created \[https://.*/instances/' "$create_output_file" \
+        | rev | cut -d ']' -f 2 | cut -d '/' -f 1 | rev \
+        > "$created_names_file"
+
+    created_names=()  # Initialize an empty array
+
+    while IFS= read -r line; do
+        created_names+=("$line")  # Append each line to the array
+    done < "$created_names_file"
+    rm -f "$created_names_file"
+
+    # If none parsed, then we truly created 0
+    if [ "${#created_names[@]}" -eq 0 ]; then
+        >&2 echo -e "${BRed}No instances were created.${Color_Off}"
+        # Show the original output for debugging
+        >&2 cat "$create_output_file"
+        rm -f "$create_output_file"
+        return 1
+    fi
+
+    # Check if we missed any requested instances
+    missing_instances=()
+    for requested in "${names[@]}"; do
+        if ! printf "%s\n" "${created_names[@]}" | grep -qx "$requested"; then
+            missing_instances+=( "$requested" )
+        fi
+    done
+    if [ "${#missing_instances[@]}" -gt 0 ]; then
+        >&2 echo -e "${BRed}Warning: Failed to create the following instances: ${missing_instances[*]}${Color_Off}"
+        cat "$create_output_file" | grep -v '^Created' >&2
+        rm -f "$create_output_file"
+    fi
+
+    # Wait for all instances to become ready
+    interval=10   # Time between status checks
+    elapsed=0
+    processed_file=$(mktemp)  # Temporary file to track processed instances
+
+    while [ "$elapsed" -lt "$timeout" ]; do
+        all_ready=true
+
+        # Fetch current instance statuses in bulk as JSON
+        current_statuses=$(gcloud compute instances list \
+            --filter="name:(${names[*]})" \
+            --zones="$zone" \
+            --format=json)
+
+        # Process instance statuses
+        echo "$current_statuses" | jq -c '.[]' | while read -r instance; do
+            name=$(jq -r '.name' <<< "$instance")
+            status=$(jq -r '.status' <<< "$instance")
+            ip=$(jq -r '.networkInterfaces[0].accessConfigs[0].natIP // empty' <<< "$instance")
+
+            if [[ "$status" == "RUNNING" ]]; then
+                if ! grep -q "^$name\$" "$processed_file"; then
+                    echo "$name" >> "$processed_file"
+                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${Color_Off}'!"
+                fi
+            else
+                all_ready=false
+            fi
+        done
+
+        if $all_ready; then
+            rm -f "$processed_file"  # Clean up the temporary file
+            sleep 45
+            return 0
+        fi
+
+        sleep "$interval"
+        elapsed=$((elapsed + interval))
+    done
+
+    rm -f "$processed_file"  # Clean up the temporary file
+    >&2 echo -e "${BRed}Error: Timeout reached before all instances became ready.${Color_Off}"
+    return 1
+}
