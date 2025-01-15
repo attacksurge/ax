@@ -360,7 +360,7 @@ delete_instances() {
 ###################################################################
 # optimized v2 function for Linode
 # create multiple instances concurrently and monitor their statuses
-# used by axiom-fleet
+# used by axiom-fleet2
 #
 create_instances() {
     image_id="$1"

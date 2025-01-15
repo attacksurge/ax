@@ -29,9 +29,10 @@ default_size="$(jq -r '.default_size' "$AXIOM_PATH"/axiom.json)"
 image_id=""
 manual_image_id=false
 timeout_sleep=6
+user_region=false
 
 ###########################################################################################################
-# DO Region Transfer
+# DO and AWS Region Transfer
 # Transfer image to all regions in unique_regions where the image does not yet exist. DO only.
 #
 region_transfer() {
@@ -55,6 +56,54 @@ region_transfer() {
                 else
                     echo -e "${BRed}Image transfer to region '${region}' failed.${Color_Off}"
                     echo -e "Use '${BWhite}axiom-region ls${BRed}' to list regions or '${BWhite}axiom-images ls${BRed}' to list images.${Color_Off}"
+                fi
+            fi
+        done
+    fi
+
+    if [[ "$provider" == "aws" ]]; then
+        source_region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
+
+        for region in "${unique_regions[@]}"; do
+
+            existing_ami_id=$(aws ec2 describe-images \
+                --region "$region" \
+                --owners self \
+                --filters "Name=name,Values=$image" \
+                --query 'Images[0].ImageId' \
+                --output text \
+            ) || true
+
+            if [[ -z "$existing_ami_id" || "$existing_ami_id" == "None" ]]; then
+                echo -e "${BYellow}Image '${BRed}${image}${BYellow}' not found in region '${BRed}${region}${BYellow}'. Transferring...${Color_Off}"
+                echo -e "${BYellow}This can take a few minutes, please be patient...${Color_Off}"
+
+                # Copy the AMI
+                copied_ami_id=$(aws ec2 copy-image \
+                    --source-image-id "$image_id" \
+                    --source-region "$source_region" \
+                    --region "$region" \
+                    --name "$image" \
+                    --description "Copied from $source_region:$image_id" \
+                    --query 'ImageId' \
+                    --output text
+                )
+                copy_status=$?
+
+                if [[ $copy_status -ne 0 || -z "$copied_ami_id" || "$copied_ami_id" == "None" ]]; then
+                    echo -e "${BRed}Failed to initiate image copy to region '$region'.${Color_Off}"
+                    echo -e "${BRed}Check your AWS CLI output above for errors (permissions, KMS, etc.).${Color_Off}"
+                else
+                    aws ec2 wait image-available \
+                        --region "$region" \
+                        --image-ids "$copied_ami_id"
+                    if [ $? -eq 0 ]; then
+                        echo -e "${BGreen}Image copy to region '$region' succeeded.${Color_Off}"
+                        echo -e "${BGreen}Waiting 30 seconds to ensure full propagation...${Color_Off}"
+                        sleep 30
+                    else
+                        echo -e "${BRed}Image copy to region '$region' failed while waiting for 'image-available'.${Color_Off}"
+                    fi
                 fi
             fi
         done
@@ -119,6 +168,7 @@ do
         if [[ "$arg" == "--regions" ]] || [[ "$arg" == "-r" ]]; then
             n=$((i+1))
             regions=$(echo ${!n})
+            user_region=true
             set=true
             pass+=($i)
             pass+=($n)
@@ -303,6 +353,12 @@ timer_pid=$!
 
 # Print the distribution and create instances
 for region in "${unique_regions[@]}"; do
+
+    # Get the right image_id if AWS and user specified region is true
+    if [[ "$provider" == "aws" ]] && [[ "$user_region" == true ]]; then
+        image_id="$(get_image_id "$image" "$region")"
+    fi
+
     # Read names for this region into an array
     readarray -t region_names < "$temp_dir/$region"
 

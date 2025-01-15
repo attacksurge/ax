@@ -376,7 +376,7 @@ wait
 ###################################################################
 # experimental v2 function
 # create multiple instances at the same time
-# used by axiom-fleet
+# used by axiom-fleet2
 #
 create_instances() {
     image_id="$1"

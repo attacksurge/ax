@@ -2,7 +2,6 @@
 
 AXIOM_PATH="$HOME/.axiom"
 
-
 ###################################################################
 #  Create Instance is likely the most important provider function :)
 #  needed for init and fleet
@@ -27,7 +26,7 @@ create_instance() {
     fi
 
     # Launch the instance using the determined security group option
-    eval aws ec2 run-instances \
+    aws ec2 run-instances \
         --image-id "$image_id" \
         --count 1 \
         --instance-type "$size" \
@@ -36,12 +35,10 @@ create_instance() {
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" \
         --user-data "$user_data" 2>&1 >> /dev/null
 
-    if [[ $? -eq 0 ]]; then
-        echo "Instance '$name' launched successfully in region '$region'."
-    else
+     if [[ $? -ne 0 ]]; then
         echo "Error: Failed to launch instance '$name' in region '$region'."
         return 1
-    fi
+     fi
 
     # Allow time for instance initialization if needed
     sleep 260
@@ -87,20 +84,52 @@ instance_list() {
 
 # used by axiom-ls
 instance_pretty() {
-	type="$(jq -r .default_size "$AXIOM_PATH/axiom.json")"
-	costs=$(curl -sL 'ec2.shop' -H 'accept: json')
-	header="Instance,Primary IP,Backend IP,Region,Type,Status,\$/M"
-	fields=".Reservations[].Instances[] | select(.State.Name != \"terminated\") | [.Tags?[]?.Value, .PublicIpAddress, .PrivateIpAddress, .Placement.AvailabilityZone, .InstanceType, .State.Name] | @csv"
-        data=$(instances|(jq -r "$fields"|sort -k1))
-	numInstances=$(echo "$data"|grep -v '^$'|wc -l)
+    costs=$(curl -sL 'ec2.shop' -H 'accept: json')
+    header="Instance,Primary IP,Backend IP,Region,Type,Status,\$/M"
+    fields=".Reservations[].Instances[]
+            | select(.State.Name != \"terminated\")
+            | [.Tags?[]?.Value, .PublicIpAddress, .PrivateIpAddress,
+               .Placement.AvailabilityZone, .InstanceType, .State.Name]
+            | @csv"
 
-	if [[ $numInstances -gt 0  ]];then
-	 cost=$(echo "$costs"|jq ".Prices[] | select(.InstanceType == \"$type\").MonthlyPrice")
-	 data=$(echo "$data" | sed "s/$/,\"$cost\" /")
-	 totalCost=$(echo  "$cost * $numInstances"|bc)
-	fi
-	footer="_,_,_,Instances,$numInstances,Total,\$$totalCost"
-	(echo "$header" && echo "$data" && echo "$footer") | sed 's/"//g' | column -t -s,
+    data=$(instances | jq -r "$fields" | sort -k1)
+    numInstances=$(echo "$data" | grep -v '^$' | wc -l)
+
+    if [[ $numInstances -gt 0 ]]; then
+        types=$(echo "$data" | cut -d, -f5 | sort | uniq)
+        totalCost=0
+        updatedData=""
+
+        while read -r type; do
+            # Strip any extra quotes from the instance type
+            type=$(echo "$type" | tr -d '"')
+
+            # Fetch monthly cost from the JSON API, default to 0 if not found
+            cost=$(echo "$costs" \
+                   | jq -r ".Prices[] | select(.InstanceType == \"$type\").MonthlyPrice")
+            cost=${cost:-0}
+
+            # Match lines containing the quoted type in the CSV data
+            typeData=$(echo "$data" | grep ",\"$type\",")
+
+            # Append cost to each matching row
+            while IFS= read -r row; do
+                updatedData+="$row,\"$cost\"\n"
+            done <<< "$typeData"
+
+            # Update total cost based on count of matching rows
+            typeCount=$(echo "$typeData" | grep -v '^$' | wc -l)
+            totalCost=$(echo "$totalCost + ($cost * $typeCount)" | bc)
+        done <<< "$types"
+
+        # Replace original data with updated rows (removing any empty lines)
+        data=$(echo -e "$updatedData" | sed '/^\s*$/d')
+    fi
+
+    footer="_,_,_,Instances,$numInstances,Total,\$$totalCost"
+    (echo "$header"; echo "$data"; echo "$footer") \
+        | sed 's/"//g' \
+        | column -t -s,
 }
 
 ###################################################################
@@ -245,11 +274,22 @@ query_instances() {
 #
 # used by axiom-fleet axiom-init
 get_image_id() {
-        query="$1"
-        images=$(aws ec2 describe-images --query 'Images[*]' --owners self)
-        name=$(echo $images| jq -r '.[].Name' | grep -wx "$query" | tail -n 1)
-        id=$(echo $images |  jq -r ".[] | select(.Name==\"$name\") | .ImageId")
-        echo $id
+    query="$1"
+    region="${2:-$(jq -r '.region' "$AXIOM_PATH"/axiom.json)}"
+
+    if [[ -z "$region" || "$region" == "null" ]]; then
+        echo "Error: No region specified and no default region found in axiom.json."
+        return 1
+    fi
+
+    # Fetch images in the specified region
+    images=$(aws ec2 describe-images --region "$region" --query 'Images[*]' --owners self)
+
+    # Get the most recent image matching the query
+    name=$(echo "$images" | jq -r '.[].Name' | grep -wx "$query" | tail -n 1)
+    id=$(echo "$images" | jq -r ".[] | select(.Name==\"$name\") | .ImageId")
+
+    echo "$id"
 }
 
 ###################################################################
@@ -420,7 +460,7 @@ delete_instances() {
 ###################################################################
 # experimental v2 function
 # create multiple instances at the same time
-# used by axiom-fleet
+# used by axiom-fleet2
 #
 create_instances() {
     image_id="$1"
@@ -473,6 +513,7 @@ create_instances() {
         # Use create-tags to set the Name tag
         aws ec2 create-tags \
            --resources "$instance_id" \
+           --region "$region" \
            --tags Key=Name,Value="$instance_name" &
 
         # Pause every 20 requests for background tasks to complete

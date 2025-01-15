@@ -416,18 +416,22 @@ delete_instances() {
 ###################################################################
 # experimental v2 function
 # create multiple instances at the same time
-# used by axiom-fleet
+# used by axiom-fleet2
 #
 create_instances() {
-    image_id="$1"
-    server_type="$2"
-    location="$3"
-    user_data="$4"
-    timeout="$5"
+    local image_id="$1"
+    local server_type="$2"
+    local location="$3"
+    local user_data="$4"
+    local timeout="$5"
     shift 5
-    names=("$@")  # Remaining arguments: instance names
 
-    # Create temporary user data file
+    names=("$@")
+    pids_data=()   # Will store "pid:name:tmpfile"
+    created_names=()
+    notified_names=()
+
+    # Create the user-data file
     user_data_file=$(mktemp)
     echo "$user_data" > "$user_data_file"
 
@@ -435,27 +439,32 @@ create_instances() {
     sshkey="$(jq -r '.sshkey' "$AXIOM_PATH/axiom.json")"
     pubkey_path="$HOME/.ssh/$sshkey.pub"
     if [ ! -f "$pubkey_path" ]; then
-        echo -e "${BRed}Error: SSH public key not found at $pubkey_path${Color_Off}"
+        >&2 echo -e "${BRed}Error: SSH public key not found at $pubkey_path${Color_Off}"
         rm -f "$user_data_file"
         return 1
     fi
 
-    sshkey_fingerprint=$(ssh-keygen -l -E md5 -f "$pubkey_path" | awk '{print $2}' | cut -d : -f 2-)
-    keyid=$(hcloud ssh-key list -o json | jq -r ".[] | select(.fingerprint == \"$sshkey_fingerprint\").id")
+    sshkey_fingerprint="$(ssh-keygen -l -E md5 -f "$pubkey_path" | awk '{print $2}' | cut -d : -f 2-)"
+    keyid="$(hcloud ssh-key list -o json | jq -r ".[] | select(.fingerprint == \"$sshkey_fingerprint\").id")"
     if [ -z "$keyid" ]; then
-        keyid=$(hcloud ssh-key create --name "$sshkey" --public-key-from-file "$pubkey_path" -o json | jq -r '.id')
+        keyid="$(
+            hcloud ssh-key create \
+                --name "$sshkey" \
+                --public-key-from-file "$pubkey_path" \
+                -o json 2>/dev/null \
+            | jq -r '.id'
+        )"
         if [ -z "$keyid" ]; then
-            echo -e "${BRed}Error: Failed to create SSH key in Hetzner${Color_Off}"
+            >&2 echo -e "${BRed}Error: Failed to create SSH key in Hetzner${Color_Off}"
             rm -f "$user_data_file"
             return 1
         fi
     fi
 
-    # Array to track "pid:instance_name" for each background process
-    pids_data=()
-
-    # Start each instance creation in the background, storing "pid:name"
+    # Spin up each server in the background.
     for name in "${names[@]}"; do
+        tmpfile=$(mktemp)
+
         (
             hcloud server create \
                 --type "$server_type" \
@@ -465,13 +474,11 @@ create_instances() {
                 --ssh-key "$keyid" \
                 --user-data-from-file "$user_data_file" \
                 --without-ipv6 \
-                -o json > "/tmp/${name}_create.log" 2>&1
-        ) &
+                -o json 2>&1
+        ) >"$tmpfile" 2>&1 &
 
         pid=$!
-        pids_data+=( "$pid:$name" )
-
-        sleep 4  # Small delay to avoid API rate limiting
+        pids_data+=( "$pid:$name:$tmpfile" )
     done
 
     total=${#pids_data[@]}
@@ -479,101 +486,129 @@ create_instances() {
     success_count=0
     fail_count=0
 
+    already_notified() {
+        local x
+        for x in "${notified_names[@]}"; do
+            [ "$x" = "$1" ] && return 0
+        done
+        return 1
+    }
+
+    mark_notified() {
+        notified_names+=( "$1" )
+    }
+
     elapsed=0
-    interval=10
+    interval=8
 
-    # Poll until all processes finish or we hit the timeout
     while [ "$elapsed" -lt "$timeout" ]; do
-        # If all are done, break early
-        if [ "$completed" -eq "$total" ]; then
-            break
-        fi
 
-        # If all have failed, break early
-        if [ "$fail_count" -eq "$total" ]; then
-            break
-        fi
-
-        # Build a fresh list of any still-running processes
+        # Check which creation processes finished
         still_running=()
         for entry in "${pids_data[@]}"; do
             pid="${entry%%:*}"
-            inst="${entry##*:}"
+            rest="${entry#*:}"
+            nm="${rest%%:*}"
+            file="${rest#*:}"
 
-            # Check if process is still running
             if kill -0 "$pid" 2>/dev/null; then
-                # Still alive, keep it in the running list
                 still_running+=( "$entry" )
             else
-                # Process ended, collect its status
                 wait "$pid"
                 exit_code=$?
                 completed=$((completed + 1))
 
+                output="$(cat "$file" 2>/dev/null)"
+                rm -f "$file"
+
                 if [ "$exit_code" -eq 0 ]; then
-
-                    # Fetch instance IP
-                    ip=$(hcloud server describe "$inst" -o json | jq -r '.public_net.ipv4.ip')
-                    if [ -n "$ip" ] && [ "$ip" != "null" ]; then
-                        >&2 echo -e "${BWhite}Initialized instance '${BGreen}$inst${Color_Off}${BWhite}' at IP '${BGreen}${ip}${BWhite}'!${Color_Off}"
-                    else
-                        >&2 echo -e "${BWhite}Initialized instance '${BGreen}$inst${Color_Off}${BWhite}' (No IP yet).${Color_Off}"
-                    fi
-
                     success_count=$((success_count + 1))
+                    created_names+=( "$nm" )
                 else
-                    echo -e "${BRed}Instance '$inst' failed to create. ERROR $(cat /tmp/${inst}_create.log).${Color_Off}"
                     fail_count=$((fail_count + 1))
+                    >&2 echo -e "${BRed}Error creating instance '$nm':${Color_Off}"
+                    >&2 echo "$output"
                 fi
             fi
         done
-
-        # Update pids_data to reflect only those still running
         pids_data=( "${still_running[@]}" )
 
-        # If all done (success or failure), break
-        if [ "$completed" -eq "$total" ]; then
-            break
-        fi
-        if [ "$fail_count" -eq "$total" ]; then
-            break
+
+        if [ "${#created_names[@]}" -gt 0 ]; then
+            servers_json="$(hcloud server list -o json 2>/dev/null)"
+
+            # parse everything in one pass
+            server_lines="$(
+                echo "$servers_json" \
+                | jq -c '.[] | {name: .name, status: .status, ip: .public_net.ipv4.ip}'
+            )"
+
+            # each line is like {"name":"host1","status":"running","ip":"X.X.X.X"}
+            IFS=$'\n'
+            for line in $server_lines; do
+                IFS=$' \t\n'
+                name="$(echo "$line" | jq -r '.name')"
+                status="$(echo "$line" | jq -r '.status')"
+                ip="$(echo "$line" | jq -r '.ip')"
+
+                # only handle if name is in created_names
+                # and not yet "notified"
+                if [[ " ${created_names[*]} " == *" $name "* ]]; then
+                    if ! already_notified "$name"; then
+                        if [ "$status" = "running" ] && [ -n "$ip" ] && [ "$ip" != "null" ]; then
+                            mark_notified "$name"
+                            >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!${Color_Off}"
+                        fi
+                    fi
+                fi
+            done
+            IFS=$' \t\n'
         fi
 
-        # Sleep for next poll
+        # Check if done
+        done_creating=false
+        if [ "$completed" -eq "$total" ] || [ "$fail_count" -eq "$total" ]; then
+            done_creating=true
+        fi
+
+        if $done_creating; then
+            all_running=true
+            for x in "${created_names[@]}"; do
+                if ! already_notified "$x"; then
+                    all_running=false
+                    break
+                fi
+            done
+            if $all_running; then
+                break
+            fi
+        fi
+
         sleep "$interval"
         elapsed=$((elapsed + interval))
     done
 
-    # If we still have running processes after the timeout, kill them
+    # If timed out but some processes still run, kill them
     if [ "$elapsed" -ge "$timeout" ] && [ "${#pids_data[@]}" -gt 0 ]; then
-        echo -e "${BRed}Error: Timeout reached (${elapsed}s) before all instances were created.${Color_Off}"
-        for entry in "${pids_data[@]}"; do
-            pid="${entry%%:*}"
-            inst="${entry##*:}"
-            kill "$pid" 2>/dev/null
-            wait "$pid" 2>/dev/null
-            echo -e "${BRed}Killed remaining creation process for instance '${inst}' (PID: $pid).${Color_Off}"
-        done
+        >&2 echo -e "${BRed}Error: Timeout reached (${elapsed}s) before creation finished or instances ran.${Color_Off}"
         rm -f "$user_data_file"
         return 1
     fi
 
-    # Cleanup temporary file
+    # Now safe to remove the user_data_file
     rm -f "$user_data_file"
 
-    # Final outcome checks
+    # Final checks
     if [ "$fail_count" -eq "$total" ]; then
-        echo -e "${BRed}Error: All $total instances failed.${Color_Off}"
+        >&2 echo -e "${BRed}Error: All $total instance(s) failed to create.${Color_Off}"
         return 1
     fi
 
-    # If some failed (but not all), still return error as requested
     if [ "$fail_count" -gt 0 ]; then
-        echo -e "${BRed}Error: $fail_count instance(s) failed, $success_count succeeded.${Color_Off}"
+        >&2 echo -e "${BRed}Warning: $fail_count instance(s) failed, $success_count succeeded.${Color_Off}"
         return 1
     fi
 
-    # Otherwise, all succeeded
-    echo -e "${BGreen}Success: All $success_count instances created successfully!${Color_Off}"
+    >&2 echo -e "${BGreen}Success: All $success_count instance(s) created and running!${Color_Off}"
     return 0
 }

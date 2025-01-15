@@ -358,9 +358,10 @@ delete_instances() {
 }
 
 ###################################################################
-# Create multiple instances at the same time
+# experimental v2 function
+# create multiple instances at the same time
+# used by axiom-fleet2
 #
-# Needed for axiom-init
 create_instances() {
     image_id="$1"
     size_slug="$2"
