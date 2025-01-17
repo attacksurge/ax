@@ -377,78 +377,251 @@ delete_instances() {
 # used by axiom-fleet2
 #
 create_instances() {
-    image_id="$1"
-    size="$2"
-    region="$3"
-    user_data="$4"
-    timeout="$5"
+    local image_id="$1"
+    local size="$2"
+    local region="$3"
+    local user_data="$4"
+    local timeout="$5"
     shift 5
-    names=("$@")  # Remaining arguments are instance names
+    local all_names=("$@")
 
-    # Import or retrieve SSH key fingerprint
+    # Retrieve SSH key info
+    local sshkey
     sshkey="$(jq -r '.sshkey' < "$AXIOM_PATH/axiom.json")"
-    sshkey_fingerprint="$(ssh-keygen -l -E md5 -f ~/.ssh/$sshkey.pub | awk '{print $2}' | cut -d : -f 2-)"
-    keyid=$(doctl compute ssh-key import "$sshkey" \
-        --public-key-file ~/.ssh/$sshkey.pub \
+
+    local sshkey_fingerprint
+    sshkey_fingerprint="$(ssh-keygen -l -E md5 -f ~/.ssh/"$sshkey".pub \
+                          | awk '{print $2}' | cut -d : -f 2-)"
+
+    local keyid
+    keyid="$(doctl compute ssh-key import "$sshkey" \
+        --public-key-file ~/.ssh/"$sshkey".pub \
         --format ID \
-        --no-header 2>/dev/null) ||
-    keyid=$(doctl compute ssh-key list | grep "$sshkey_fingerprint" | awk '{print $1 }')
+        --no-header 2>/dev/null)" ||
+    keyid="$(doctl compute ssh-key list | grep "$sshkey_fingerprint" | awk '{print $1}')"
 
-    # Create instances in one API call and capture output
-    instance_data=$(doctl compute droplet create "${names[@]}" \
-        --image "$image_id" \
-        --size "$size" \
-        --region "$region" \
-        --enable-ipv6 \
-        --ssh-keys "$keyid" \
-        --format ID,Name \
-        --no-header \
-        --user-data "$user_data")
+    get_droplet_usage_and_limit() {
+        # droplet_used => how many droplets are currently running
+        droplet_used="$(doctl compute droplet list --no-header 2>/dev/null | wc -l | awk '{print $1}')"
+        if [ -z "$droplet_used" ]; then
+            droplet_used=0
+        fi
 
-    # Extract instance IDs and names
-    instance_ids=($(echo "$instance_data" | awk '{print $1}'))
-    instance_names=($(echo "$instance_data" | awk '{print $2}'))
+        # droplet_limit => maximum your account allows
+        local acc_json
+        acc_json="$(doctl account get --output json 2>/dev/null)"
+        droplet_limit="$(echo "$acc_json" | jq -r '.droplet_limit // 0')"
+        if [ -z "$droplet_limit" ] || [ "$droplet_limit" = "null" ]; then
+            droplet_limit=0
+        fi
+    }
 
-    # Create a temporary file to track processed instances
-    processed_file=$(mktemp)
+    # BATCHING
+    local total=${#all_names[@]}
+    local chunk_size=200
+    local start=0
 
-    # Monitor instance statuses
-    interval=8   # Time between status checks
-    elapsed=0
+    local pids=()         # background PIDs
+    local batch_files=()  # output files
+    local parsed=()       # 0 => not parsed, 1 => parsed
+    local batch_index=0
 
-    while [ "$elapsed" -lt "$timeout" ]; do
-        all_ready=true
+    while [ $start -lt $total ]; do
+        local end=$((start + chunk_size))
+        if [ $end -gt $total ]; then
+            end=$total
+        fi
 
-        # Fetch current droplet data
-        current_statuses=$(doctl compute droplet list --format ID,Name,Status,PublicIPv4 --no-header)
+        # This subset of names is up to 200
+        local batch=("${all_names[@]:$start:$((end - start))}")
 
-        # Process instance statuses
-        for i in "${!instance_ids[@]}"; do
-            id="${instance_ids[$i]}"
-            name="${instance_names[$i]}"
-            status=$(echo "$current_statuses" | awk -v id="$id" '$1 == id {print $3}')
-            ip=$(echo "$current_statuses" | awk -v id="$id" '$1 == id {print $4}')
+        # Check how many droplets we can still create:
+        get_droplet_usage_and_limit
+        local capacity=$((droplet_limit - droplet_used))
 
-            if [[ "$status" == "active" ]]; then
-                if ! grep -q "^$name\$" "$processed_file"; then
-                    echo "$name" >> "$processed_file"
-                    >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!"
-                fi
+        if [ $capacity -le 0 ]; then
+            # No more capacity => 0 droplet creation
+            echo -e "${BRed}No capacity left. This batch #$batch_index will create 0 droplets.${Color_Off}"
+            local outfile
+            outfile="$(mktemp -t ax_fleet2_batch_${batch_index}.XXXX)"
+            echo "No droplets created (capacity=0)" >"$outfile"
+
+            pids+=(0)  # no real process
+            batch_files+=("$outfile")
+            parsed+=(0)
+
+        else
+            # If we have capacity but the batch is bigger => reduce the batch
+            if [ ${#batch[@]} -gt $capacity ]; then
+                echo -e  "${BYellow}Warning: Reducing droplets created by $(( ${#batch[@]} - capacity )) to avoid exceeding capacity limits.${Color_Off}"
+                batch=( "${batch[@]:0:$capacity}" )
+            fi
+
+            if [ ${#batch[@]} -eq 0 ]; then
+                # Means capacity was smaller than 1 => skip
+                local outfile
+                outfile="$(mktemp -t ax_fleet2_batch_${batch_index}.XXXX)"
+                echo -e  "No droplets created (capacity=0)" >"$outfile"
+
+                pids+=(0)
+                batch_files+=("$outfile")
+                parsed+=(0)
+
             else
-                all_ready=false
+
+                local outfile
+                outfile="$(mktemp -t ax_fleet2_batch_${batch_index}.XXXX)"
+                (
+                    doctl compute droplet create "${batch[@]}" \
+                        --image "$image_id" \
+                        --size "$size" \
+                        --region "$region" \
+                        --enable-ipv6 \
+                        --ssh-keys "$keyid" \
+                        --format ID,Name \
+                        --no-header \
+                        --user-data "$user_data"
+                ) >"$outfile" 2>&1 &
+
+                local pid=$!
+                pids+=("$pid")
+                batch_files+=("$outfile")
+                parsed+=(0)
+            fi
+        fi
+
+        batch_index=$((batch_index + 1))
+        start=$end
+
+        # Sleep 60s before next batch
+        if [ $start -lt $total ]; then
+            sleep 60
+        fi
+    done
+
+    local num_batches=${#pids[@]}
+
+    # POLLING
+    local all_instance_ids=()
+    local all_instance_names=()
+    local processed_file
+    processed_file="$(mktemp -t ax_fleet2_proc.XXXX)"
+
+    local start_time
+    start_time="$(date +%s)"
+    local interval=8
+
+    # parse_doctl_output -> numeric-check to skip lines like "No droplets created"
+    parse_doctl_output() {
+        local file="$1"
+        local count=0
+        while IFS= read -r line; do
+            # Example valid line: "1234567 cannon01"
+            # Example invalid line: "No droplets created (capacity=0)"
+            local did
+            local dname
+            did="$(echo "$line" | awk '{print $1}')"
+            dname="$(echo "$line" | awk '{print $2}')"
+
+            # Skip empty or partial lines
+            if [ -z "$did" ] || [ -z "$dname" ]; then
+                continue
+            fi
+
+            # Only proceed if first field is numeric
+            if ! [[ "$did" =~ ^[0-9]+$ ]]; then
+                continue
+            fi
+
+            all_instance_ids+=( "$did" )
+            all_instance_names+=( "$dname" )
+            count=$((count + 1))
+        done < "$file"
+    }
+
+    # Main loop: check background processes, parse output, poll droplets
+    while true; do
+        local now
+        now="$(date +%s)"
+        local elapsed=$(( now - start_time ))
+
+        # Check each batch
+        local still_running=0
+        local b
+        for b in "${!pids[@]}"; do
+            local pid="${pids[$b]}"
+            if [ "$pid" -eq 0 ]; then
+                # This batch created 0 => parse once if not done
+                if [ "${parsed[$b]}" -eq 0 ]; then
+                    parse_doctl_output "${batch_files[$b]}"
+                    parsed[$b]=1
+                fi
+                continue
+            fi
+
+            # If pid != 0, check if it's still running
+            if kill -0 "$pid" 2>/dev/null; then
+                still_running=$((still_running + 1))
+            else
+                # If done & not parsed, parse
+                if [ "${parsed[$b]}" -eq 0 ]; then
+                    parse_doctl_output "${batch_files[$b]}"
+                    parsed[$b]=1
+                fi
             fi
         done
 
-        if $all_ready; then
-            rm -f "$processed_file"  # Clean up the temporary file
-            sleep 30
-            return 0
+        # Poll all known droplets
+        if [ ${#all_instance_ids[@]} -gt 0 ]; then
+            local current_statuses
+            current_statuses="$(doctl compute droplet list \
+                --format ID,Name,Status,PublicIPv4 \
+                --no-header 2>/dev/null)"
+            if [ -n "$current_statuses" ]; then
+                local all_ready=true
+                local i
+                for i in "${!all_instance_ids[@]}"; do
+                    local did="${all_instance_ids[$i]}"
+                    local dname="${all_instance_names[$i]}"
+                    local status
+                    local ip
+                    status="$(echo "$current_statuses" \
+                        | awk -v droplet_id="$did" '$1 == droplet_id {print $3}')"
+                    ip="$(echo "$current_statuses" \
+                        | awk -v droplet_id="$did" '$1 == droplet_id {print $4}')"
+
+                    if [ "$status" = "active" ]; then
+                        if ! grep -qx "$dname" "$processed_file"; then
+                            echo "$dname" >> "$processed_file"
+                           >&2 echo -e "${BWhite}Initialized instance '${BGreen}$dname${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!"
+                        fi
+                    else
+                        all_ready=false
+                    fi
+                done
+
+                # If no more processes AND all known droplets are active => done
+                if [ "$still_running" -eq 0 ] && $all_ready; then
+                    echo -e "${BGreen}All known droplets are active, and all batches are done! Please wait..${Color_Off}"
+                    rm -f "$processed_file"
+                    return 0
+                fi
+            fi
+        else
+            # No known droplets yet. If no processes running => done
+            if [ "$still_running" -eq 0 ]; then
+                echo "No droplets created at all. Exiting."
+                return 0
+            fi
         fi
 
-        sleep "$interval"
-        elapsed=$((elapsed + interval))
-    done
+        # Check timeout
+        if [ "$elapsed" -ge "$timeout" ]; then
+            echo "ERROR: Timed out waiting for droplets to become active."
+            return 1
+        fi
 
-    rm -f "$processed_file"  # Clean up the temporary file
-    return 1
+        # D) Sleep
+        sleep "$interval"
+    done
 }
