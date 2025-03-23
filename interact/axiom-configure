@@ -37,7 +37,7 @@ manage_auto_update() {
     if [ -z "${auto_update+x}" ]; then
         # Loop until a valid response is given
         while true; do
-            echo -e -n "${BYellow}Do you want to periodically update axiom automatically in the background (recommended)? y/n: \n>> ${Color_Off}"
+            echo -e -n "${BYellow}Do you want to periodically update axiom automatically in the background (recommended but optional)? y/n: \n>> ${Color_Off}"
             read acc
 
             if [[ "$acc" == "y" ]] || [[ "$acc" == "yes" ]]; then
@@ -92,7 +92,7 @@ function bash_shell(){
         source ~/.bashrc  >> /dev/null 2>&1
     else
         while true; do
-            echo -e -n "${BYellow}Do you want to install Golang ${GolangVersion}? y/n: \n>> ${Color_Off}"
+            echo -e -n "${BYellow}Do you want to install Golang ${GolangVersion}? (optional) y/n: \n>> ${Color_Off}"
             read acc
             if [[ "$acc" == "y" ]]; then
                 echo -e "${BGreen}Installing Golang ${GolangVersion}${Color_Off}"
@@ -149,7 +149,7 @@ function zsh_shell(){
         SHELL=$(which zsh)
     else
         while true; do
-            echo -e -n "${BYellow}Do you want to install Golang ${GolangVersion}? y/n: \n>> ${Color_Off}"
+            echo -e -n "${BYellow}Do you want to install Golang ${GolangVersion}? (optional) y/n: \n>> ${Color_Off}"
             read acc
             if [[ "$acc" == "y" ]]; then
                 echo -e "${BGreen}Installing Golang ${GolangVersion}${Color_Off}"
@@ -205,7 +205,7 @@ function omz_shell(){
         SHELL=$(which zsh)
     else
         while true; do
-            echo -e -n "${BYellow}Do you want to install Golang ${GolangVersion}? y/n: \n>> ${Color_Off}"
+            echo -e -n "${BYellow}Do you want to install Golang ${GolangVersion}? (optional) y/n: \n>> ${Color_Off}"
             read acc
             if [[ "$acc" == "y" ]]; then
                 echo -e "${BGreen}Installing Golang ${GolangVersion}${Color_Off}"
@@ -500,7 +500,7 @@ if [[ $BASEOS == "Mac" ]]; then
     else
         # Validate Python installation prompt
         while true; do
-            echo -e -n "${BYellow}Do you want to upgrade Python (brew install python3) y/n: \n>> ${Color_Off}"
+            echo -e -n "${BYellow}Do you want to install/upgrade Python (brew install python3) (possibly required) y/n: \n>> ${Color_Off}"
             read acc
             if [[ "$acc" == "y" ]]; then
                 echo -e "${BGreen}Installing Python3...${Color_Off}"
@@ -515,7 +515,8 @@ if [[ $BASEOS == "Mac" ]]; then
 
         # Validate setuptools installation prompt
         while true; do
-            echo -e -n "${BYellow}Do you want to install setuptools? This will break system packages (pip3 install setuptools --break-system-packages) y/n: \n>> ${Color_Off}"
+            echo -e "${BYellow}Setuptools is required for Interlace. If you’re not in a virtual environment, installing it might break system packages. We still recommend installing.${Color_Off}"
+            echo -e -n "${BYellow}Do you want to install setuptools? (pip3 install setuptools --break-system-packages) y/n: \n>> ${Color_Off}"
             read acc
             if [[ "$acc" == "y" ]]; then
                 echo -e "${BGreen}Installing setuptools...${Color_Off}"
@@ -530,7 +531,7 @@ if [[ $BASEOS == "Mac" ]]; then
 
         # Validate Go installation prompt
         while true; do
-            echo -e -n "${BYellow}Do you want to install/update Go? (brew install golang) y/n: \n>> ${Color_Off}"
+            echo -e -n "${BYellow}Do you want to install/update Go? (brew install golang) (optional) y/n: \n>> ${Color_Off}"
             read acc
             if [[ "$acc" == "y" ]]; then
                 echo -e "${BGreen}Installing go...${Color_Off}"

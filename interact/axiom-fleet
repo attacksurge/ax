@@ -231,7 +231,7 @@ echo -e "${BWhite}Initializing new fleet '${BGreen}$gen_name${BWhite}' with '${B
 echo -e "${BWhite}INITIALIZING IN 5 SECONDS, CTRL+C to quit... ${Color_Off}"
 sleep 5
 
-total=$(query_instances "$gen_name*" | tr " " "\n" | sed 's/[^0-9]*//g'| sort -nr | head -n1)
+total=$(query_instances "$gen_name*" | tr " " "\n" | sed -n 's/.*[^0-9]\([0-9]*\)$/\1/p' | sort -nr | head -n1)
 total="${total#0}"
 start="${start#0}"
 start=$((total))
@@ -273,7 +273,7 @@ echo -e "${BWhite}Initializing new fleet '${BGreen}$gen_name${BWhite}' with '${B
 echo -e "${BWhite}Cycling through following regions:${BGreen}$cycle_regions${BWhite}...${Color_Off}"
 echo -e "${BWhite}INITIALIZING IN 5 SECONDS, CTRL+C to quit... ${Color_Off}"
 sleep 5
-total=$(query_instances "$gen_name*" | tr " " "\n" | sed 's/[^0-9]*//g'| sort -nr | head -n1)
+total=$(query_instances "$gen_name*" | tr " " "\n" | sed -n 's/.*[^0-9]\([0-9]*\)$/\1/p' | sort -nr | head -n1)
 total="${total#0}"
 start="${start#0}"
 start=$((total))

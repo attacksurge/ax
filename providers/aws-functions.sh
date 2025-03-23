@@ -79,7 +79,7 @@ instance_ip() {
 
 # used by axiom-select axiom-ls
 instance_list() {
-        instances | jq -r '.Reservations[].Instances[].Tags?[]?.Value?'
+        instances | jq -r '.Reservations[].Instances[] | select(.State.Name != "terminated") | .Tags?[]? | select(.Key == "Name") | .Value'
 }
 
 # used by axiom-ls
@@ -87,10 +87,10 @@ instance_pretty() {
     costs=$(curl -sL 'ec2.shop' -H 'accept: json')
     header="Instance,Primary IP,Backend IP,Region,Type,Status,\$/M"
     fields=".Reservations[].Instances[]
-            | select(.State.Name != \"terminated\")
-            | [.Tags?[]?.Value, .PublicIpAddress, .PrivateIpAddress,
-               .Placement.AvailabilityZone, .InstanceType, .State.Name]
-            | @csv"
+             | select(.State.Name != \"terminated\")
+             | [(.Tags?[]? | select(.Key == \"Name\") | .Value), .PublicIpAddress, .PrivateIpAddress,
+                .Placement.AvailabilityZone, .InstanceType, .State.Name]
+             | @csv"
 
     data=$(instances | jq -r "$fields" | sort -k1)
     numInstances=$(echo "$data" | grep -v '^$' | wc -l)
@@ -252,9 +252,11 @@ query_instances() {
 
         if [[ "$var" == *"*"* ]]; then
             var=$(echo "$var" | sed 's/*/.*/g')
-            matches=$(echo "$droplets" | jq -r '.Reservations[].Instances[] | select(.State.Name != "terminated") | .Tags?[]?.Value' | grep -E "^${var}$")
+            matches=$(echo "$droplets" | jq -r '.Reservations[].Instances[] | select(.State.Name != "terminated") | .Tags?[]? | select(.Key == "Name") | .Value' | \
+             grep -E "^${var}$")
         else
-            matches=$(echo "$droplets" | jq -r '.Reservations[].Instances[] | select(.State.Name != "terminated") | .Tags?[]?.Value' | grep -w -E "^${var}$")
+            matches=$(echo "$droplets" | jq -r '.Reservations[].Instances[] | select(.State.Name != "terminated") | .Tags?[]? | select(.Key == "Name") | .Value' | \
+             grep -w -E "^${var}$")
         fi
 
         if [[ -n "$matches" ]]; then
@@ -298,7 +300,7 @@ get_image_id() {
 #
 # get JSON data for snapshots
 snapshots() {
-        aws ec2 describe-images --query 'Images[*]' --owners self 
+        aws ec2 describe-images --query 'Images[*]' --owners self
 }
 
 # used by axiom-images
@@ -308,7 +310,7 @@ get_snapshots()
     footer="_,_,_,_"
     fields=".[] | [.Name, .CreationDate, .ImageId, (.BlockDeviceMappings[] | select(.Ebs) | (.Ebs.VolumeSize | tostring))] | @csv"
     data=$(aws ec2 describe-images --query 'Images[*]' --owners self)
-        (echo "$header" && echo "$data" | (jq -r "$fields"|sort -k1) && echo "$footer") | sed 's/"//g' | column -t -s, 
+        (echo "$header" && echo "$data" | (jq -r "$fields"|sort -k1) && echo "$footer") | sed 's/"//g' | column -t -s,
 }
 
 # Delete a snapshot by its name
@@ -333,7 +335,6 @@ create_snapshot() {
 # used by axiom-regions
 list_regions() {
     aws ec2 describe-regions --query "Regions[*].RegionName" | jq -r '.[]'
-
 }
 
 # used by axiom-regions
@@ -368,7 +369,7 @@ reboot() {
 # axiom-power axiom-images
 instance_id() {
 	name="$1"
-	instances | jq -r ".Reservations[].Instances[] | select(.Tags?[]?.Value==\"$name\") | .InstanceId"
+	instances | jq -r ".Reservations[].Instances[] | select(.State.Name != \"terminated\") | select(.Tags?[]? | select(.Key == \"Name\" and .Value == \"$name\")) | .InstanceId"
 }
 
 ###################################################################

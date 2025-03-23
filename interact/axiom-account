@@ -401,7 +401,7 @@ if [[ "$provider" == "aws" ]]; then
 
     if [[ -n "$aws_access_key" && -n "$aws_secret_access_key" ]]; then
         echo -e "${BGreen}Configuring AWS CLI with credentials from axiom.json...${Color_Off}"
-        aws configure set aws_access_key "$aws_access_key"
+        aws configure set aws_access_key_id "$aws_access_key"
         aws configure set aws_secret_access_key "$aws_secret_access_key"
         aws configure set region "$aws_region"
     else

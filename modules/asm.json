@@ -1,6 +1,14 @@
 [
   {
-    "command": "cat input | subfinder -json -o output/host.json | jq --unbuffered -r '.host' | dnsx -json -o output/dns.json | jq --unbuffered -r '.host' | httpx -json -o output/http.json | jq --unbuffered -r '.url'",
+    "command": [
+      "cat input",
+      "| subfinder -json -o output/host.json",
+      "| jq --unbuffered -r '.host'",
+      "| dnsx -json -o output/dns.json",
+      "| jq --unbuffered -r '.host'",
+      "| httpx -json -o output/http.json",
+      "| jq --unbuffered -r '.url'"
+    ],
     "ext": "dir"
   }
 ]

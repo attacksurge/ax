@@ -657,7 +657,7 @@ do
             set=true
             pass+=($i)
             pass+=($n)
-        fi 
+        fi
         if [[ "$arg" == "-anew" ]] || [[ "$arg" == "--anew" ]] ; then
             anew="true"
             set=true
@@ -1310,9 +1310,12 @@ fi
 
 ###########################################################################################################
 #  Parse command from module
-#  Transparently replace _target_ with _safe-target_
+#  Transparently replace _target_ with _safe-target_ (unless --unsafe is used)
 #
-command="$(parse_module "$module" "$ext" | jq -r '.command')"
+command="$(
+  parse_module "$module" "$ext" |
+  jq -r 'if (.command | type)=="array" then .command | join(" ") else .command end'
+)"
 
 if [[ "$safe" == "true" ]]; then
  command=${command//_target_/_safe-target_}
