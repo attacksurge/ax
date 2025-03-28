@@ -247,32 +247,25 @@ if [ "$instances" ]; then
 
             # Check if the host part contains a wildcard character '*'
             if [[ "$host" =~ "*" ]]; then
-                # Replace the wildcard host with the current instance name and remove any '*' characters
-                full=$(echo "$var" | sed "s/$host/$instance/g" | sed 's/\*//g')
-
-                # Append the processed path to 'str' or set 'str' if it's the first addition
-                if [[ "$str" ]]; then
-                    str="$str $full"
-                else
-                    str="$full"
-                fi
+                escaped_host=$(printf '%s' "$host" | sed 's/\*/\\\*/g')
+                full=$(echo "$var" | sed "s/$escaped_host/$instance/g" | sed 's/\*//g')
             else
-                # If there's no wildcard, append the original argument to 'str'
                 if [[ "$str" ]]; then
                     str="$str $var"
                 else
                     str="$var"
                 fi
+                full="$str"
             fi
 
-            # Replace any '$name' placeholder in 'str' with the actual instance name
-            str=$(echo $str | sed "s/\$name/$instance/g")
+            # Replace any '$name' placeholder in 'full' with the actual instance name
+            full=$(echo "$full" | sed "s/\$name/$instance/g")
 
             # Accumulate the final command or path for the current instance in 'line'
             if [[ "$line" ]]; then
-                line="$line $str"
+                line="$line $full"
             else
-                line="$str"
+                line="$full"
             fi
         done
 
