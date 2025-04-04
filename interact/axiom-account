@@ -612,6 +612,82 @@ if [[ "$provider" == "scaleway" ]]; then
     fi
 fi # end of scaleway
 
+# Install Exoscale CLI if not already installed, check token is valid or kick off bootstrap
+#
+if [[ "$provider" == "exoscale" ]]; then
+    installed_version=$(exo version 2>/dev/null | cut -d ' ' -f2)
+
+    # Check if the installed version matches the recommended version
+    if [[ "$(printf '%s\n' "$installed_version" "$ExoscaleCliVersion" | sort -V | head -n 1)" != "$ExoscaleCliVersion" ]]; then
+        echo -e "${Yellow}exo CLI is either not installed or version is lower than the recommended version in ~/.axiom/interact/includes/vars.sh${Color_Off}"
+
+    	# Determine the OS type and handle installation accordingly
+    	if [[ $BASEOS == "Mac" ]]; then
+    		whereis brew
+            if [ ! $? -eq 0 ] || [[ ! -z ${AXIOM_FORCEBREW+x} ]]; then
+                echo -e "${BGreen}Installing Homebrew...${Color_Off}"
+                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            else
+                echo -e "${BGreen}Checking for Homebrew... already installed.${Color_Off}"
+            fi
+    		echo -e "${BGreen}Installing/Updating exo CLI on macOS...${Color_Off}"
+    		brew tap exoscale/tap
+    		brew install exoscale-cli
+    
+    	elif [[ $BASEOS == "Linux" ]]; then
+    		if uname -a | grep -qi "Microsoft"; then
+    			OS="UbuntuWSL"
+    		else
+    			OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
+    			if ! command -v lsb_release &> /dev/null; then
+    				OS="unknown-Linux"
+    				BASEOS="Linux"
+    			fi
+    		fi
+
+            if [[ $OS == "Fedora" ]] || [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+    			echo -e "${BGreen}Installing/Updating exo CLI on $OS...${Color_Off}"
+    			curl -fsSL https://raw.githubusercontent.com/exoscale/cli/master/install-latest.sh | sh
+    		elif [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+    			gpg --keyserver keys.openpgp.org --recv-key 7100E8BFD6199CE0374CB7F003686F8CDE378D41
+    			git clone https://aur.archlinux.org/exoscale-cli-bin.git
+    			cd exoscale-cli-bin/
+    			makepkg --install
+    		else
+    			echo -e "${BRed}Unsupported Linux distribution: $OS${Color_Off}"
+    			echo -e "${BRed}Follow instructions from https://community.exoscale.com/community/tools/exoscale-command-line-interface/#other-distributions ${Color_Off}"
+    		fi
+    	fi
+    fi
+    
+    echo -e "${BGreen}Installing Exoscale packer plugin...${Color_Off}"
+    packer plugins install github.com/exoscale/exoscale
+
+    # Validate token and setup configuration
+    api_key="$(jq -r '.api_key' "$AXIOM_PATH/accounts/$1.json")"
+    api_secret="$(jq -r '.api_secret' "$AXIOM_PATH/accounts/$1.json")"
+    region="$(jq -r '.region' "$AXIOM_PATH/accounts/$1.json")"
+    echo -e "${BGreen}Configuring exo CLI with credentials from axiom.json...${Color_Off}"
+
+    cat <<EOF > $(echo "$HOME/.config/exoscale/exoscale.toml")
+defaultaccount = '${1}'
+
+[[accounts]]
+defaultZone = '${region}'
+key = '${api_key}'
+name = '${1}'
+secret = '${api_secret}'
+EOF
+
+    # Check if credentials are valid
+    if exo limits &> /dev/null; then
+        echo -e "${BGreen}Exoscale account authenticated successfully.${Color_Off}"
+    else
+        echo -e "${Red}Exoscale account authentication failed. Please check your credentials.${Color_Off}"
+        bootstrap
+    fi
+fi # end of exoscale
+
 echo -e "${Green}Selected $1 successfully${Color_Off}"
 else
         echo -e "${Red}Account name not present${Color_Off}"

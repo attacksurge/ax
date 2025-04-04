@@ -408,6 +408,11 @@ elif [[ "$provider" == "gcp" ]]; then
  jq '.op = "***************************************************************************************************************************"' |
  jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.sshkey = "'$sshkey'"'
 
+elif [[ "$provider" ==  "exoscale" ]]; then
+ cat "$account_path" | jq '.api_secret = "************************************"'| \
+ jq '.op = "***************************************************************************************************************************"' |
+ jq '.imageid = "'$snapshot_name'"' | jq '.provisioner = "'$provisioner'"' | jq '.sshkey = "'$sshkey'"'
+
 else
  cat "$account_path"
 fi

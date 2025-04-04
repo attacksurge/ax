@@ -45,6 +45,9 @@ get_default_size() {
 
   elif [[ "$provider" == "scaleway" ]]; then
     default_size="DEV1-S"
+  
+  elif [[ "$provider" == "exoscale" ]]; then
+    default_size="standard.medium"
 
   else
     echo "Error: Unknown provider '$provider'"
