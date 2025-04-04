@@ -299,10 +299,10 @@ delete_snapshot() {
 
 # axiom-images
 create_snapshot() {
-        instance="$1"
-        snapshot_name="$2"
+    instance="$1"
+    snapshot_name="$2"
 	snapshot_id=$(exo compute instance snapshot create "$(instance_id $instance)" -O text --output-template '{{.ID}}' 2>/dev/null)
-	exo compute intance-template register "$snapshot_name" --from-snapshot "$snapshot_id"
+	exo compute instance-template register "$snapshot_name" --from-snapshot "$snapshot_id"
 }
 
 ###################################################################
