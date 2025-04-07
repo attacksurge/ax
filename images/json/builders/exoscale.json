@@ -1,0 +1,16 @@
+{
+  "builders": [
+    {
+      "type": "exoscale",
+      "api_key": "{{ user `api_key` }}",
+      "api_secret": "{{ user `api_secret` }}",
+      "instance_template": "Linux Ubuntu 20.04 LTS 64-bit",
+      "instance_type": "{{ user `default_size` }}",
+      "instance_security_groups": ["{{ user `security_group_name` }}"],
+      "template_zones": ["{{ user `region` }}"],
+      "template_name": "{{ user `snapshot_name` }}",
+      "template_username": "op",
+      "ssh_username": "root"
+    }
+  ]
+}
