@@ -145,22 +145,18 @@ instance_pretty() {
              | [.name, .ip_address, .zone, .type, .state]
              | @csv"
 
-    data=$(instances | jq -r "$fields" | sort -k1)
+    data=$(instances | jq -r "$fields" | sort -t',' -k1)
 
-    # Fetch live hourly pricing (USD)
-    declare -A hourly_prices monthly_prices
-    while IFS="=" read -r key val; do
-        short="${key#running_}"
-        hourly_prices[$short]="$val"
-        monthly_prices[$short]=$(echo "$val * 730" | bc -l)
-    done < <(curl -s https://portal.exoscale.com/api/pricing/opencompute | jq -r '.usd | to_entries[] | "\(.key)=\(.value)"')
+    # Fetch pricing into temp file
+    pricing_tmp=$(mktemp)
+    curl -s https://portal.exoscale.com/api/pricing/opencompute | \
+        jq -r '.usd | to_entries[] | "\(.key)=\(.value)"' > "$pricing_tmp"
 
     total_hourly=0
     total_monthly=0
     output=""
 
     while IFS=',' read -r name ip region type status; do
-        # Skip if type is empty (e.g. no instances)
         [ -z "$type" ] && continue
 
         type_clean=$(echo "$type" | tr -d '"')
@@ -168,32 +164,36 @@ instance_pretty() {
         short_type="${short_type#cpu.}"
         short_type="${short_type#memory.}"
 
-        hr_cost=${hourly_prices[$short_type]:-0}
-        mo_cost=${monthly_prices[$short_type]:-0}
+        # Lookup pricing manually
+        hr_cost=$(grep -F "running_${short_type}=" "$pricing_tmp" | cut -d '=' -f2)
+        hr_cost=${hr_cost:-0}
+        mo_cost=$(echo "scale=4; $hr_cost * 730" | bc)
 
-        total_hourly=$(echo "$total_hourly + $hr_cost" | bc)
-        total_monthly=$(echo "$total_monthly + $mo_cost" | bc)
+        total_hourly=$(echo "scale=4; $total_hourly + $hr_cost" | bc)
+        total_monthly=$(echo "scale=2; $total_monthly + $mo_cost" | bc)
 
         hr_fmt=$(printf "%.4f" "$hr_cost")
         mo_fmt=$(printf "%.2f" "$mo_cost")
 
-        output+="$name,$ip,$region,$type_clean,$status,\$$hr_fmt,\$$mo_fmt\n"
+        output+="$name,$ip,$region,$type_clean,$status,\$$hr_fmt,\$$mo_fmt"$'\n'
     done <<< "$data"
 
-    numInstances=$(echo -e "$output" | grep -c '^[^_[:space:]]')
+    rm -f "$pricing_tmp"
+
+    numInstances=$(echo -n "$output" | grep -c '^[^_[:space:]]')
     total_hr_fmt=$(printf "%.4f" "$total_hourly")
     total_mo_fmt=$(printf "%.2f" "$total_monthly")
     footer="_,_,_,Instances,$numInstances,\$$total_hr_fmt,\$$total_mo_fmt"
 
-    # Final output
     {
         echo "$header"
         if [ -n "$output" ]; then
-            echo -e "$output"
+            echo "$output"
         fi
         echo "$footer"
     } | sed 's/"//g' | column -t -s,
 }
+
 
 ###################################################################
 #  Dynamically generates axiom's SSH config based on your cloud inventory
