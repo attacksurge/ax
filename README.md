@@ -1,13 +1,46 @@
 <p align="center">
 <a href="https://ax-framework.gitbook.io/wiki" target="_blank"> 
-<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/read-the-docs.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/Exoscale/screenshots/axbanner.png"/>
 </a> 
 </p>
 
+<p align="center">
 
-# Overview
-The Distributed Scanning Framework for Everybody! Join our Discord https://discord.gg/KYcD5E4qjU!
+  <a href="https://twitter.com/0xtavian">
+    <img src="https://img.shields.io/badge/Follow-@0xtavian-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white&labelColor=222222">
+  </a>
+  &nbsp;&nbsp;
 
+  <a href="https://ax-framework.gitbook.io/wiki">
+    <img src="https://img.shields.io/badge/Documentation-2E2E2E?style=for-the-badge&logo=readthedocs&logoColor=white">
+  </a>
+  &nbsp;&nbsp;
+
+  <a href="modules/">
+    <img src="https://img.shields.io/badge/Modules-2E2E2E?style=for-the-badge&logo=json&logoColor=white">
+  </a>
+  &nbsp;&nbsp;
+
+  <a href="https://discord.gg/nGqfRh9tdT">
+    <img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white">
+  </a>
+
+  <hr style="width:60%; border:0; border-top:1px solid #333;">
+</p>
+
+
+**Ax Framework is a next-generation cloud automation system for offensive security and distributed scanning.**  
+Designed to scale with your workflow, Ax orchestrates custom tools, scripts, and scans across cloud fleets — with zero friction.
+
+- **Modular scanning** with support for tools like `nmap`, `ffuf`, `gowitness`, `nuclei`, and more.  
+- **Fleet-wide execution** of arbitrary binaries or scripts, with support for 9 major cloud providers: AWS, Azure, DigitalOcean, GCP, Hetzner, IBM Cloud, Scaleway, Exoscale, and Linode.  
+- **Custom JSON-based modules** define the base command structure and expose variables for runtime injection.  
+- **Automatic interpolation** of user-provided arguments into modules to build the final command on each instance.  
+- **Smart input distribution**, including automatic splitting of target lists, wordlists, and configuration files.  
+- **Multi-provider flexibility**, allowing you to switch between clouds effortlessly.
+
+
+# Overview 
 Ax Framework is a free and open-source tool utilized by Bug Hunters and Penetration Testers to efficiently operate in multiple cloud environments. It helps build and deploy repeatable infrastructure tailored for offensive security purposes.
 
 Ax includes a set of Packer Provisioner files to choose from ([JSON](https://github.com/attacksurge/ax/tree/master/images/json/provisioners) or [HCL](https://github.com/attacksurge/ax/tree/master/images/pkr.hcl/provisioners)), or you can [create your own](https://ax-framework.gitbook.io/wiki/fundamentals/bring-your-own-provisioner) (recommended).
@@ -94,6 +127,12 @@ Linode is an absoutely fantastic cloud provider and fully supported! If you're s
 <p align="center">
 <a href="https://www.scaleway.com/en/scaleway-vs-digitalocean/" target="_blank">
 <img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/scaleway.png"/>
+</a>
+</p>
+
+<p align="center">
+<a href="https://community.exoscale.com/platform/quick-start/" target="_blank">
+<img src="https://raw.githubusercontent.com/attacksurge/ax/Exoscale/screenshots/exoscale.png"/>
 </a>
 </p>
 
