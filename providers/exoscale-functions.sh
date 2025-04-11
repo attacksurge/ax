@@ -383,6 +383,7 @@ create_snapshot() {
 # transfer snapshot to new region
 # used by ax fleet2
 #transfer_snapshot() {
+# TODO
 #}
 
 ###################################################################
@@ -523,7 +524,6 @@ delete_instances() {
 # used by axiom-fleet2
 #
 create_instances() {
-set -xv
     local image_id="$1"
     local size="$2"
     local region="$3"
