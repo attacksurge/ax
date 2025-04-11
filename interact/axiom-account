@@ -633,7 +633,7 @@ if [[ "$provider" == "exoscale" ]]; then
     		echo -e "${BGreen}Installing/Updating exo CLI on macOS...${Color_Off}"
     		brew tap exoscale/tap
     		brew install exoscale-cli
-    
+
     	elif [[ $BASEOS == "Linux" ]]; then
     		if uname -a | grep -qi "Microsoft"; then
     			OS="UbuntuWSL"
@@ -659,7 +659,7 @@ if [[ "$provider" == "exoscale" ]]; then
     		fi
     	fi
     fi
-    
+
     echo -e "${BGreen}Installing Exoscale packer plugin...${Color_Off}"
     packer plugins install github.com/exoscale/exoscale
 
@@ -669,9 +669,14 @@ if [[ "$provider" == "exoscale" ]]; then
     region="$(jq -r '.region' "$AXIOM_PATH/accounts/$1.json")"
     echo -e "${BGreen}Configuring exo CLI with credentials from axiom.json...${Color_Off}"
 
-    cat <<EOF > $(echo "$HOME/.config/exoscale/exoscale.toml")
-defaultaccount = '${1}'
+    if [[ $BASEOS == "Mac" ]]; then
+      CONFIG_PATH="$HOME/Library/Application Support/exoscale"
+    else
+      CONFIG_PATH="$HOME/.config/exoscale"
+    fi
 
+    cat <<EOF > $(echo "$CONFIG_PATH/exoscale.toml")
+defaultaccount = '${1}'
 [[accounts]]
 defaultZone = '${region}'
 key = '${api_key}'

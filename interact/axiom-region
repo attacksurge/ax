@@ -47,9 +47,13 @@ then
                 fi
 
                 if [ "$provider" = "exoscale" ]; then
-                        sed -i "s/defaultZone = '[^']*'/defaultZone = '$2'/g" "$HOME/.config/exoscale/exoscale.toml"
+                         if [[ $(uname) == "Darwin"]]; then
+                               CONFIG_PATH="$HOME/Library/Application Support/exoscale"
+                         else
+                               CONFIG_PATH="$HOME/.config/exoscale"
+                         fi
+                         sed -i "s/defaultZone = '[^']*'/defaultZone = '$2'/g" "$CONFIG_PATH/exoscale.toml"
                 fi
-
 
 	mv $AXIOM_PATH/axiom.json.new $account_path
 	echo -e "${BWhite}Selected region $2${Color_Off}"

@@ -1,0 +1,12 @@
+{
+  "api_key": "<exoscale api key>",
+  "api_secret": "<exoscale api secret>",
+  "security_group_name": "<security group name>",
+  "security_group_id": "<security group id>",
+  "region": "ch-gva-2",
+  "provider": "exoscale",
+  "default_size": "standard.medium",
+  "sshkey": "axiom_rsa",
+  "imageid": "axiom-default-<timestamp>",
+  "provisioner": "default"
+}

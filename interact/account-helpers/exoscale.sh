@@ -119,7 +119,13 @@ fi
 
 function exoscalesetup(){
 
-	mkdir -p "$HOME/.config/exoscale"
+	if [[ $BASEOS == "Mac" ]]; then
+		mkdir -p "$HOME/Library/Application Support/exoscale"
+		CONFIG_PATH="$HOME/Library/Application Support/exoscale"
+	else
+		mkdir -p "$HOME/.config/exoscale"
+		CONFIG_PATH="$HOME/.config/exoscale"
+	fi
 
 	echo -e -n "${Green}Please enter your Exoscale Api Key (required): \n>> ${Color_Off}"
 	read api_key
@@ -141,7 +147,7 @@ function exoscalesetup(){
 
 	axiom_random_name="axiom-$(date +%m-%d_%H-%M-%S-%1N)"
 
-	cat <<EOF > $(echo "$HOME/.config/exoscale/exoscale.toml")
+	cat <<EOF > $(echo "$CONFIG_PATH/exoscale.toml")
 defaultaccount = '${axiom_random_name}'
 
 [[accounts]]
@@ -256,8 +262,8 @@ EOF
 	    echo -e "${BGreen}Named profile 'exoscale'${Color_Off}"
 	fi
 
-	echo -e "${BGreen}Creating Exoscale config file in ${Color_Off}'${BGreen}$HOME/.config/exoscale/exoscale.toml${Color_Off}'"
-	cat <<EOF > $(echo "$HOME/.config/exoscale/exoscale.toml")
+	echo -e "${BGreen}Creating Exoscale config file in ${Color_Off}'${BGreen}$CONFIG_PATH/exoscale.toml${Color_Off}'"
+	cat <<EOF > $(echo "$CONFIG_PATH/exoscale.toml")
 defaultaccount = '${title}'
 
 [[accounts]]
