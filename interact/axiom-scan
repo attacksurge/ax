@@ -389,9 +389,14 @@ add_extra_args() {
     IFS="|"
     for piece in $command
     do
-        if [[ "$piece" != "" ]] && [[ ! "$piece" =~ "cat" ]] && [[ ! "$piece" =~ "tee" ]] && [[ "$args_set" != "true" ]]; then
+        # If this segment is NOT empty, does NOT start with cat/tee, and we haven't injected extra_args yet
+        if [[ "$piece" != "" ]] &&
+           [[ ! "$piece" =~ ^[[:space:]]*cat[[:space:]] ]] &&
+           [[ ! "$piece" =~ ^[[:space:]]*tee[[:space:]] ]] &&
+           [[ "$args_set" != "true" ]]; then
+
             new_command="$new_command $piece $args"
-            args_set=""true
+            args_set="true"
         else
             new_command="$new_command$piece"
         fi
@@ -403,7 +408,8 @@ add_extra_args() {
     done
 
     IFS=$OLDIFS
-    echo $new_command
+    new_command="$(echo "$new_command" | tr -s ' ')"
+    echo "$new_command"
 }
 
 ###########################################################################################################
@@ -907,7 +913,6 @@ fi
 #
 banner() {
 cat << EOF >&2
-
 
  █████╗ ██╗  ██╗    ███████╗ ██████╗ █████╗ ███╗   ██╗
 ██╔══██╗╚██╗██╔╝    ██╔════╝██╔════╝██╔══██╗████╗  ██║

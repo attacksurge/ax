@@ -452,7 +452,7 @@ create_instances() {
                 --name "$sshkey" \
                 --public-key-from-file "$pubkey_path" \
                 -o json 2>/dev/null \
-            | jq -r '.id'
+            | jq -r '.ssh_key.id'
         )"
         if [ -z "$keyid" ]; then
             >&2 echo -e "${BRed}Error: Failed to create SSH key in Hetzner${Color_Off}"
