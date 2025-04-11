@@ -1,6 +1,6 @@
 <p align="center">
 <a href="https://ax-framework.gitbook.io/wiki" target="_blank"> 
-<img src="https://raw.githubusercontent.com/attacksurge/ax/Exoscale/screenshots/axbanner.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/axbanner.png"/>
 </a> 
 </p>
 
@@ -32,7 +32,7 @@
 **Ax Framework is a next-generation cloud automation system for offensive security and distributed scanning.**  
 Designed to scale with your workflow, Ax orchestrates custom tools, scripts, and scans across cloud fleets — with zero friction.
 
-- **Modular scanning** with support for tools like `nmap`, `ffuf`, `gowitness`, `nuclei`, and more.  
+- **Modular scanning** with support for tools like `nmap`, `ffuf`, `gowitness`, `nuclei`, and many more.  
 - **Fleet-wide execution** of arbitrary binaries or scripts, with support for 9 major cloud providers: AWS, Azure, DigitalOcean, GCP, Hetzner, IBM Cloud, Scaleway, Exoscale, and Linode.  
 - **Custom JSON-based modules** define the base command structure and expose variables for runtime injection.  
 - **Automatic interpolation** of user-provided arguments into modules to build the final command on each instance.  
@@ -55,7 +55,7 @@ Once Ax is set up and configured, you can deploy a fleet of 50-100+ instances in
 
 Ax attempts to follow the Unix philosophy by providing building blocks that allow users to easily orchestrate one or many cloud instances. This flexibility enables the creation of continuous scanning pipelines and the execution of general, one-off, highly parallelized workloads.
 
-Currently Digital Ocean, IBM Cloud, Linode, Azure, AWS, Hetzner, GCP and Scaleway are officially supported cloud providers.
+Currently Digital Ocean, IBM Cloud, Linode, Azure, AWS, Hetzner, GCP, Scaleway and Exoscale are officially supported cloud providers.
 
 ![](https://raw.githubusercontent.com/attacksurge/ax/refs/heads/master/screenshots/axiom-fleet.gif)
 
@@ -132,7 +132,7 @@ Linode is an absoutely fantastic cloud provider and fully supported! If you're s
 
 <p align="center">
 <a href="https://community.exoscale.com/platform/quick-start/" target="_blank">
-<img src="https://raw.githubusercontent.com/attacksurge/ax/Exoscale/screenshots/exoscale.png"/>
+<img src="https://raw.githubusercontent.com/attacksurge/ax/master/screenshots/exoscale.png"/>
 </a>
 </p>
 
