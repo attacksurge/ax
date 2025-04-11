@@ -7,63 +7,98 @@ AXIOM_PATH="$HOME/.axiom"
 #  needed for init and fleet
 #
 create_instance() {
-    name="$1"
-    image_id="$2"
-    size="$3"
-    region="$4"
-    user_data="$5"
+    local name="$1"
+    local image_id="$2"
+    local size="$3"
+    local region="$4"
+    local user_data="$5"
 
-    security_group_name="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_name')"
-    security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
+    # Read security group information from axiom.json
+    local security_group_name
+    local security_group_id
+    security_group_name="$(jq -r '.security_group_name' "$AXIOM_PATH/axiom.json")"
+    security_group_id="$(jq -r '.security_group_id' "$AXIOM_PATH/axiom.json")"
 
-	user_data_file=$(mktemp)
-	echo "$user_data" > "$user_data_file"
+    # Create a temporary file for user_data
+    local user_data_file
+    user_data_file=$(mktemp)
+    echo "$user_data" > "$user_data_file"
 
-	# import pub ssh key or get ssh key fingerprint
-	sshkey="$(jq -r '.sshkey' "$AXIOM_PATH/axiom.json")"
-	pubkey_path="$HOME/.ssh/$sshkey.pub"
-	sshkey_fingerprint="$(ssh-keygen -l -E md5 -f "$pubkey_path" | awk '{print $2}' | cut -d':' -f2-)"
-	keyid=$(exo compute ssh-key list -O text --output-template 'Name: {{.Name}} | Fingerprint: {{.Fingerprint}}' | grep "$sshkey_fingerprint" | awk '{print $2}')
-	if [[ -z "$keyid" ]]; then
-		keyid=$(exo compute ssh-key register "$sshkey" "$pubkey_path" -O text --output-template '{{.Name}}' 2>/dev/null)
-		if [[ $? -ne 0 ]]; then
-			sshkey="$sshkey+$RANDOM"
-			keyid=$(exo compute ssh-key register "$sshkey" "$pubkey_path" -O text --output-template '{{.Name}}' 2>/dev/null)
-			rm -f "$user_data_file"
-			return 1
-		fi
-	fi
+    # Extract SSH key info from axiom.json and derive its fingerprint
+    local sshkey
+    local pubkey_path
+    local sshkey_fingerprint
+    local keyid
+    sshkey="$(jq -r '.sshkey' "$AXIOM_PATH/axiom.json")"
+    pubkey_path="$HOME/.ssh/$sshkey.pub"
+    sshkey_fingerprint="$(
+        ssh-keygen -l -E md5 -f "$pubkey_path" \
+        | awk '{print $2}' \
+        | cut -d':' -f2-
+    )"
 
-    # Determine whether to use security_group_name or security_group_id
+    # Check if this SSH key is already registered, otherwise register it
+    keyid="$(
+        exo compute ssh-key list \
+            -O text \
+            --output-template 'Name: {{.Name}} | Fingerprint: {{.Fingerprint}}' \
+        | grep "$sshkey_fingerprint" \
+        | awk '{print $2}'
+    )"
+
+    if [[ -z "$keyid" ]]; then
+        keyid="$(
+            exo compute ssh-key register "$sshkey" "$pubkey_path" \
+                -O text \
+                --output-template '{{.Name}}' 2>/dev/null
+        )"
+
+        # If registration fails, retry with a slightly modified key name
+        if [[ $? -ne 0 ]]; then
+            sshkey="$sshkey+$RANDOM"
+            keyid="$(
+                exo compute ssh-key register "$sshkey" "$pubkey_path" \
+                    -O text \
+                    --output-template '{{.Name}}' 2>/dev/null
+            )"
+            rm -f "$user_data_file"
+            return 1
+        fi
+    fi
+
+    # Determine whether to use the security group name or ID
+    local security_group_option
     if [[ -n "$security_group_name" && "$security_group_name" != "null" ]]; then
         security_group_option="--security-group $security_group_name"
     elif [[ -n "$security_group_id" && "$security_group_id" != "null" ]]; then
         security_group_option="--security-group $security_group_id"
     else
         echo "Error: Both security_group_name and security_group_id are missing or invalid in axiom.json."
-		rm -f "$user_data_file"
+        rm -f "$user_data_file"
         return 1
     fi
 
-    # Launch the instance using the determined security group option
-    exo compute instance create "$name"  \
+    # Create (launch) the instance
+    if ! exo compute instance create "$name" \
         --template "$image_id" \
-		--template-visibility "private" \
+        --template-visibility "private" \
         --instance-type "$size" \
         --zone "$region" \
         $security_group_option \
-		--ssh-key "$keyid" \
-        --cloud-init "$user_data_file" 2>&1 >> /dev/null
+        --ssh-key "$keyid" \
+        --quiet \
+        --cloud-init "$user_data_file" 2>&1 >> /dev/null; then
 
-    if [[ $? -ne 0 ]]; then
-    	echo "Error: Failed to launch instance '$name' in region '$region'."
-		rm -f "$user_data_file"
-    	return 1
-     fi
-	 
-	# Allow time for instance initialization if needed
+        echo "Error: Failed to launch instance '$name' in region '$region'."
+        rm -f "$user_data_file"
+        return 1
+    fi
+
+    # Allow time for instance initialization
     sleep 260
-	rm -f "$user_data_file"
+
+    # Clean up
+    rm -f "$user_data_file"
 }
 
 ###################################################################
@@ -96,7 +131,7 @@ instances() {
 # used by axiom-ls axiom-init
 instance_ip() {
         name="$1"
-        instances | jq -r ".[] | select(.name = \"$name\") | .ip_address"
+        instances | jq -r ".[] | select(.name == \"$name\") | .ip_address"
 }
 
 # used by axiom-select axiom-ls
@@ -104,20 +139,60 @@ instance_list() {
         instances | jq -r ' .[] | .name'
 }
 
-# used by axiom-ls
 instance_pretty() {
-    header="Instance,Primary IP,Region,Type,Status"
+    header="Instance,Primary IP,Region,Type,Status,\$/H,\$/M"
     fields=".[]
              | [.name, .ip_address, .zone, .type, .state]
              | @csv"
 
     data=$(instances | jq -r "$fields" | sort -k1)
-    numInstances=$(echo "$data" | grep -v '^$' | wc -l)
 
-    footer="_,_,_,Instances,$numInstances"
-    (echo "$header"; echo "$data"; echo "$footer") \
-        | sed 's/"//g' \
-        | column -t -s,
+    # Fetch live hourly pricing (USD)
+    declare -A hourly_prices monthly_prices
+    while IFS="=" read -r key val; do
+        short="${key#running_}"
+        hourly_prices[$short]="$val"
+        monthly_prices[$short]=$(echo "$val * 730" | bc -l)
+    done < <(curl -s https://portal.exoscale.com/api/pricing/opencompute | jq -r '.usd | to_entries[] | "\(.key)=\(.value)"')
+
+    total_hourly=0
+    total_monthly=0
+    output=""
+
+    while IFS=',' read -r name ip region type status; do
+        # Skip if type is empty (e.g. no instances)
+        [ -z "$type" ] && continue
+
+        type_clean=$(echo "$type" | tr -d '"')
+        short_type="${type_clean#standard.}"
+        short_type="${short_type#cpu.}"
+        short_type="${short_type#memory.}"
+
+        hr_cost=${hourly_prices[$short_type]:-0}
+        mo_cost=${monthly_prices[$short_type]:-0}
+
+        total_hourly=$(echo "$total_hourly + $hr_cost" | bc)
+        total_monthly=$(echo "$total_monthly + $mo_cost" | bc)
+
+        hr_fmt=$(printf "%.4f" "$hr_cost")
+        mo_fmt=$(printf "%.2f" "$mo_cost")
+
+        output+="$name,$ip,$region,$type_clean,$status,\$$hr_fmt,\$$mo_fmt\n"
+    done <<< "$data"
+
+    numInstances=$(echo -e "$output" | grep -c '^[^_[:space:]]')
+    total_hr_fmt=$(printf "%.4f" "$total_hourly")
+    total_mo_fmt=$(printf "%.2f" "$total_monthly")
+    footer="_,_,_,Instances,$numInstances,\$$total_hr_fmt,\$$total_mo_fmt"
+
+    # Final output
+    {
+        echo "$header"
+        if [ -n "$output" ]; then
+            echo -e "$output"
+        fi
+        echo "$footer"
+    } | sed 's/"//g' | column -t -s,
 }
 
 ###################################################################
@@ -280,13 +355,13 @@ get_image_id() {
 #
 # get JSON data for snapshots
 snapshots() {
-        exo compute instance-template list -v private -O json
+    exo compute instance-template list -v private -O json
 }
 
 # used by axiom-images
 get_snapshots()
 {
-		exo compute instance-template list -v private
+    exo compute instance-template list -v private
 }
 
 # Delete a snapshot by its name
@@ -301,9 +376,14 @@ delete_snapshot() {
 create_snapshot() {
     instance="$1"
     snapshot_name="$2"
-	snapshot_id=$(exo compute instance snapshot create "$(instance_id $instance)" -O text --output-template '{{.ID}}' 2>/dev/null)
-	exo compute instance-template register "$snapshot_name" --from-snapshot "$snapshot_id"
+    snapshot_id=$(exo compute instance snapshot create "$(instance_id $instance)" -O text --output-template '{{.ID}}' 2>/dev/null)
+    exo compute instance-template register "$snapshot_name" --from-snapshot "$snapshot_id"
 }
+
+# transfer snapshot to new region
+# used by ax fleet2
+#transfer_snapshot() {
+#}
 
 ###################################################################
 # Get data about regions
@@ -343,8 +423,8 @@ reboot() {
 
 # axiom-power axiom-images
 instance_id() {
-	name="$1"
-	instances | jq -r ".[] | select(.name == \"$name\") | .id"
+  name="$1"
+  instances | jq -r ".[] | select(.name == \"$name\") | .id"
 }
 
 ###################################################################
@@ -352,13 +432,13 @@ instance_id() {
 #  Used by ax sizes
 #
 sizes_list() {
-	{
-  		echo -e "InstanceType\tvCPUs\tMemory"
-  		exo compute instance-type list -O json \
-    	| jq -r '.[] | select(.authorized != false) | [.family, .name, .cpus, .memory] | @csv' \
-    	| tr -d '"' \
-    	| awk -F',' '{printf "%s.%s\t%s\t%s GB\n", $1, $2, $3, $4/1073741824}'
-	} | column -t -s $'\t'
+    {
+        echo -e "InstanceType\tvCPUs\tMemory"
+        exo compute instance-type list -O json \
+            | jq -r '.[] | select(.authorized != false) | [.family, .name, .cpus, .memory] | @csv' \
+            | tr -d '"' \
+            | awk -F',' '{printf "%s.%s\t%s\t%.2f GB\n", $1, $2, $3, $4 / 1073741824}'
+    } | column -t -s $'\t'
 }
 
 ###################################################################
@@ -367,76 +447,74 @@ sizes_list() {
 # used by axiom-rm --multi
 #
 delete_instances() {
-    names="$1"
-	force="$2"
+    local names="$1"
+    local force="$2"
 
-	# Convert names to an array for processing
-    name_array=($names)
+    # Convert space-separated names string into array manually (portable)
+    set -- $names
+    name_array=("$@")
 
-    # Make a single call to get all Hetzner instances
-    all_instances=$(instances)
+    # Retrieve all instances
+    all_instances="$(instances)"
 
-    # Declare arrays to store server names and IDs for deletion
     all_instance_ids=()
     all_instance_names=()
 
-    # Iterate over all instances and filter by the provided names
-	for name in "${name_array[@]}"; do
-		instance_info=$(echo "$all_instances" | jq -r --arg name "$name" '.[] | select(.name | test($name))')
-		if [ -n "$instance_info" ]; then
-			instance_id=$(echo "$instance_info" | jq -r '.id')
-			instance_name=$(echo "$instance_info" | jq -r '.name')
+    for name in "${name_array[@]}"; do
+        instance_info="$(echo "$all_instances" | jq -r --arg name "$name" '.[] | select(.name | test($name))')"
 
-			all_instance_ids+=("$instance_id")
-			all_instance_names+=("$instance_name")
-		else
-			echo -e "${BRed}Warning: No Exoscale instance found for the name '$name'.${Color_Off}"
-		fi
-	done
-	
-	# Force deletion: Delete all instances without prompting
-    if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting: ${all_instance_names[@]}...${Color_Off}"
-        for i in "${!all_instance_names[@]}"; do
-			instance_name="${all_instance_names[$i]}"
-			instance_id="${all_instance_ids[$i]}"
+        if [ -n "$instance_info" ]; then
+            instance_id="$(echo "$instance_info" | jq -r '.id')"
+            instance_name="$(echo "$instance_info" | jq -r '.name')"
+            all_instance_ids+=( "$instance_id" )
+            all_instance_names+=( "$instance_name" )
+        else
+            echo -e "${BRed}Warning: No Exoscale instance found for the name '$name'.${Color_Off}"
+        fi
+    done
 
-			exo compute instance delete "$instance_id" -f
-		done
-
-    # Prompt for each instance if force is not true
-    else
-		# Collect instances for deletion after user confirmation
-        confirmed_instance_ids=()
-        confirmed_instance_names=()
-
-        for i in "${!all_instance_names[@]}"; do
+    if [ "$force" = "true" ]; then
+        echo -e "${Red}Deleting: ${all_instance_names[*]}...${Color_Off}"
+        i=0
+        while [ $i -lt ${#all_instance_names[@]} ]; do
             instance_name="${all_instance_names[$i]}"
             instance_id="${all_instance_ids[$i]}"
-
-            echo -e -n "Are you sure you want to delete $instance_name (y/N) - default NO: "
-            read ans
+            exo compute instance delete "$instance_id" -f -Q &
+            i=$((i + 1))
+        done
+        wait
+    else
+        confirmed_instance_ids=()
+        confirmed_instance_names=()
+        i=0
+        while [ $i -lt ${#all_instance_names[@]} ]; do
+            instance_name="${all_instance_names[$i]}"
+            instance_id="${all_instance_ids[$i]}"
+            echo -n "Are you sure you want to delete $instance_name (y/N) - default NO: "
+            read -r ans
             if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-                confirmed_instance_ids+=("$instance_id")
-                confirmed_instance_names+=("$instance_name")
+                confirmed_instance_ids+=( "$instance_id" )
+                confirmed_instance_names+=( "$instance_name" )
             else
                 echo "Deletion aborted for $instance_name."
             fi
+            i=$((i + 1))
         done
 
-		# Delete confirmed instances in bulk
         if [ ${#confirmed_instance_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting: ${confirmed_instance_names[@]}...${Color_Off}"
-            for i in "${!confirmed_instance_names[@]}"; do
-				instance_name="${confirmed_instance_names[$i]}"
-				instance_id="${confirmed_instance_ids[$i]}"
-
-				exo compute instance delete "$instance_id" -f
-			done
+            echo -e "${Red}Deleting: ${confirmed_instance_names[*]}...${Color_Off}"
+            i=0
+            while [ $i -lt ${#confirmed_instance_names[@]} ]; do
+                instance_name="${confirmed_instance_names[$i]}"
+                instance_id="${confirmed_instance_ids[$i]}"
+                exo compute instance delete "$instance_id" -f -Q &
+                i=$((i + 1))
+            done
+            wait
         else
             echo -e "${BRed}No instances were confirmed for deletion.${Color_Off}"
         fi
-	fi
+    fi
 }
 
 ###################################################################
@@ -445,14 +523,16 @@ delete_instances() {
 # used by axiom-fleet2
 #
 create_instances() {
+set -xv
     local image_id="$1"
     local size="$2"
     local region="$3"
     local user_data="$4"
     local timeout="$5"
     shift 5
+
     names=("$@")  # Remaining arguments are instance names
-	pids_data=()   # Will store "pid:name:tmpfile"
+    pids_data=()  # Will store "pid:name:tmpfile"
     created_names=()
     notified_names=()
 
@@ -460,8 +540,8 @@ create_instances() {
     user_data_file=$(mktemp)
     echo "$user_data" > "$user_data_file"
 
-	# Ensure SSH key exists in Exoscale
-	sshkey="$(jq -r '.sshkey' "$AXIOM_PATH/axiom.json")"
+    # Ensure SSH key exists in Exoscale
+    sshkey="$(jq -r '.sshkey' "$AXIOM_PATH/axiom.json")"
     pubkey_path="$HOME/.ssh/$sshkey.pub"
     if [ ! -f "$pubkey_path" ]; then
         >&2 echo -e "${BRed}Error: SSH public key not found at $pubkey_path${Color_Off}"
@@ -469,74 +549,78 @@ create_instances() {
         return 1
     fi
 
-	sshkey_fingerprint="$(ssh-keygen -l -E md5 -f "$pubkey_path" | awk '{print $2}' | cut -d':' -f2-)"
-	keyid=$(exo compute ssh-key list -O text --output-template 'Name: {{.Name}} | Fingerprint: {{.Fingerprint}}' | grep "$sshkey_fingerprint" | awk '{print $2}')
-	if [ -z "$keyid" ]; then
-		keyid=$(exo compute ssh-key register "$sshkey" "$pubkey_path" -O text --output-template '{{.Name}}' 2>/dev/null)
-		if [ -z "$keyid" ]; then
-			>&2 echo -e "${BRed}Error: Failed to create SSH key in Exoscale${Color_Off}"
-			rm -rf "$user_data_file"
-			return 1
-		fi
-	fi
-	
-    security_group_name="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_name')"
-    security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
+    sshkey_fingerprint="$(ssh-keygen -l -E md5 -f "$pubkey_path" | awk '{print $2}' | cut -d':' -f2-)"
+    keyid=$(exo compute ssh-key list -O text --output-template 'Name: {{.Name}} | Fingerprint: {{.Fingerprint}}' | grep "$sshkey_fingerprint" | awk '{print $2}')
+    if [ -z "$keyid" ]; then
+        keyid=$(exo compute ssh-key register "$sshkey" "$pubkey_path" -O text --output-template '{{.Name}}' 2>/dev/null)
+        if [ -z "$keyid" ]; then
+            >&2 echo -e "${BRed}Error: Failed to create SSH key in Exoscale${Color_Off}"
+            rm -f "$user_data_file"
+            return 1
+        fi
+    fi
 
     # Determine whether to use security_group_name or security_group_id
+    security_group_name="$(jq -r '.security_group_name' "$AXIOM_PATH/axiom.json")"
+    security_group_id="$(jq -r '.security_group_id' "$AXIOM_PATH/axiom.json")"
     if [[ -n "$security_group_name" && "$security_group_name" != "null" ]]; then
         security_group_option="--security-group $security_group_name"
     elif [[ -n "$security_group_id" && "$security_group_id" != "null" ]]; then
         security_group_option="--security-group $security_group_id"
     else
         echo "Error: Both security_group_name and security_group_id are missing or invalid in axiom.json."
+        rm -f "$user_data_file"
         return 1
     fi
 
     for name in "${names[@]}"; do
-		tmpfile=$(mktemp)
+        tmpfile=$(mktemp)
+        (
+            exo compute instance create "$name" \
+                --template "$image_id" \
+                --template-visibility "private" \
+                --instance-type "$size" \
+                --zone "$region" \
+                $security_group_option \
+                --ssh-key "$keyid" \
+                --cloud-init "$user_data_file" \
+                -O json 2>&1
+        ) >"$tmpfile" 2>&1 &
+        pid=$!
+        pids_data+=( "$pid:$name:$tmpfile" )
+    done
 
-		(
-			exo compute instance create "$name"  \
-        		--template "$image_id" \
-				--template-visibility "private" \
-        		--instance-type "$size" \
-        		--zone "$region" \
-        		$security_group_option \
-				--ssh-key "$keyid" \
-        		--cloud-init "$user_data_file" \
-				-O json 2>&1
-		) >"$tmpfile" 2>&1 &
+    total=${#pids_data[@]}
+    completed=0
+    success_count=0
+    fail_count=0
 
-		pid=$!
-		pids_data+=( "$pid:$name:$tmpfile" )
-	done
+    already_notified() {
+        local x
+        for x in "${notified_names[@]}"; do
+            [ "$x" = "$1" ] && return 0
+        done
+        return 1
+    }
 
-	total=${#pids_data[@]}
-	completed=0
-	success_count=0
-	fail_count=0
+    mark_notified() {
+        notified_names+=( "$1" )
+    }
 
-	already_notified() {
-		local x
-		for x in "${notified_names[@]}"; do
-			[ "$x" = "$1" ] && return 0
-		done
-		return 1
-	}
+    is_expected_name() {
+        for expected in "${names[@]}"; do
+            [ "$expected" = "$1" ] && return 0
+        done
+        return 1
+    }
 
-	mark_notified() {
-		notified_names+=( "$1" )
-	}
+    elapsed=0
+    interval=8
 
-	elapsed=0
-	interval=8
-
-	while [ "$elapsed" -lt "$timeout" ]; do
-
-		# Check which creation processes finished
-		still_running=()
-		for entry in "${pids_data[@]}"; do
+    # Check which creation processes finished
+    while [ "$elapsed" -lt "$timeout" ]; do
+        still_running=()
+        for entry in "${pids_data[@]}"; do
             pid="${entry%%:*}"
             rest="${entry#*:}"
             nm="${rest%%:*}"
@@ -560,56 +644,55 @@ create_instances() {
                     >&2 echo -e "${BRed}Error creating instance '$nm':${Color_Off}"
                     >&2 echo "$output"
                 fi
+                if [ "$fail_count" -eq "$total" ]; then
+                    >&2 echo -e "${BRed}Error: All $total instance(s) failed to create.${Color_Off}"
+                    rm -f "$user_data_file"
+                    return 1
+                fi
             fi
         done
-		pids_data=( "${still_running[@]}" )
+        pids_data=( "${still_running[@]}" )
 
-		if [ "${#created_names[@]}" -gt 0 ]; then
-			servers_json="$(exo compute instance list -O json 2>/dev/null)"
+        if [ "${#created_names[@]}" -gt 0 ]; then
+            servers_json="$(exo compute instance list -O json 2>/dev/null)"
+            server_lines="$(echo "$servers_json" | jq -c '.[] | {name: .name, status: .state, ip: .ip_address}')"
 
-			# parse everything in one pass
-            server_lines="$(
-                echo "$servers_json" \
-                | jq -c '.[] | {name: .name, status: .state, ip: .ip_address}'
-            )"
-
-			# each line is like {"name":"host1","status":"running","ip":"X.X.X.X"}
+            # each line is like {"name":"host1","status":"running","ip":"X.X.X.X"}
             IFS=$'\n'
             for line in $server_lines; do
-                IFS=$' \t\n'
                 name="$(echo "$line" | jq -r '.name')"
                 status="$(echo "$line" | jq -r '.status')"
                 ip="$(echo "$line" | jq -r '.ip')"
 
                 # only handle if name is in created_names
                 # and not yet "notified"
-                if [[ " ${created_names[*]} " == *" $name "* ]]; then
-                    if ! already_notified "$name"; then
-                        if [ "$status" = "running" ] && [ -n "$ip" ] && [ "$ip" != "null" ]; then
-                            mark_notified "$name"
-                            >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!${Color_Off}"
-                        fi
+                if is_expected_name "$name" && ! already_notified "$name"; then
+                    if [ "$status" = "running" ] && [ -n "$ip" ] && [ "$ip" != "null" ]; then
+                        mark_notified "$name"
+                        >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!${Color_Off}"
                     fi
                 fi
             done
             IFS=$' \t\n'
-		fi
+        fi
 
-		sleep "$interval"
+        if [ "$completed" -eq "$total" ]; then
+            all_running=true
+            for name in "${names[@]}"; do
+                if ! already_notified "$name"; then
+                    all_running=false
+                    break
+                fi
+            done
+            $all_running && break
+        fi
+
+        sleep "$interval"
         elapsed=$((elapsed + interval))
-	done
+    done
 
-	# If timed out but some processes still run, kill them
-    if [ "$elapsed" -ge "$timeout" ] && [ "${#pids_data[@]}" -gt 0 ]; then
-        >&2 echo -e "${BRed}Error: Timeout reached (${elapsed}s) before creation finished or instances ran.${Color_Off}"
-        rm -f "$user_data_file"
-        return 1
-    fi
-
-    # Now safe to remove the user_data_file
     rm -f "$user_data_file"
 
-    # Final checks
     if [ "$fail_count" -eq "$total" ]; then
         >&2 echo -e "${BRed}Error: All $total instance(s) failed to create.${Color_Off}"
         return 1
