@@ -45,10 +45,10 @@ then
                 if [ "$provider" = "aws" ]; then
                         aws configure set region $2
                 fi
-				
-				if [ "$provider" = "exoscale" ]; then
-					sed -i "s/defaultZone = '[^']*'/defaultZone = '$2'/g" "$HOME/.config/exoscale/exoscale.toml"
-				fi
+
+                if [ "$provider" = "exoscale" ]; then
+                        sed -i "s/defaultZone = '[^']*'/defaultZone = '$2'/g" "$HOME/.config/exoscale/exoscale.toml"
+                fi
 
 
 	mv $AXIOM_PATH/axiom.json.new $account_path
