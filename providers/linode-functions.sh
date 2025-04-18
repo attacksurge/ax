@@ -59,7 +59,7 @@ delete_instance() {
 #
 # takes no arguments, outputs JSON object with instances
 instances() {
-	linode-cli linodes list --json
+	linode-cli linodes list --all-rows --json
 }
 
 # takes one argument, name of instance, returns raw IP address
@@ -333,7 +333,7 @@ delete_instances() {
     linode_names=()
     linode_ids=()
 
-    linode_cli_output=$(linode-cli linodes list --format "id,label" --no-headers --text)
+    linode_cli_output=$(linode-cli linodes list --all-rows --format "id,label" --no-headers --text)
 
     # gather the IDs for the provided names
     for name in $names; do
@@ -450,7 +450,7 @@ create_instances() {
         all_ready=true
 
         # Fetch current Linode data
-        current_statuses=$(linode-cli linodes list --format id,label,status,ipv4 --no-header --text)
+        current_statuses=$(linode-cli linodes list --all-rows --format id,label,status,ipv4 --no-header --text)
 
         for i in "${!instance_ids[@]}"; do
             id="${instance_ids[$i]}"
