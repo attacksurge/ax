@@ -187,7 +187,7 @@
         "git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git /home/op/recon/sqlmap-dev",
 
         "echo 'Installing mantra'",
-        "/bin/su -l op -c '/usr/local/go/bin/go install github.com/MrEmpy/Mantra@latest'",
+        "/bin/su -l op -c '/usr/local/go/bin/go install github.com/Brosck/mantra@latest'",
 
         "echo 'Installing subjs'",
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install -v github.com/lc/subjs@latest'",
