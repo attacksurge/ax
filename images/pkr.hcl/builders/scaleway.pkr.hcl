@@ -25,6 +25,9 @@ source "scaleway" "packer" {
   image_name = var.snapshot_name
   snapshot_name = var.snapshot_name
   remove_volume = "true"
+  root_volume {
+    size_in_gb = 25
+  }
 }
 
 build {
