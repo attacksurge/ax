@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ip=$(dig +short myip.opendns.com @resolver1.opendns.com)
+ip=$(ip -4 addr show scope global | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -vE '^10\.|^172\.(1[6-9]|2[0-9]|3[01])\.|^192\.168\.')
 echo ""
 cat << EOF
  █████╗ ██╗  ██╗

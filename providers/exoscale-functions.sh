@@ -12,6 +12,12 @@ create_instance() {
     local size="$3"
     local region="$4"
     local user_data="$5"
+    local disk="$6"
+
+    # Default disk size to 20 if not provided
+    if [[ -z "$disk" || "$disk" == "null" ]]; then
+        disk="50"
+    fi
 
     # Read security group information from axiom.json
     local security_group_name
@@ -86,6 +92,7 @@ create_instance() {
         --zone "$region" \
         $security_group_option \
         --ssh-key "$keyid" \
+        --disk-size "$disk" \
         --quiet \
         --cloud-init "$user_data_file" 2>&1 >> /dev/null; then
 
@@ -353,12 +360,6 @@ get_image_id() {
 # Manage snapshots
 # used for axiom-images
 #
-# get JSON data for snapshots
-snapshots() {
-    exo compute instance-template list -v private -O json
-}
-
-# used by axiom-images
 get_snapshots()
 {
     exo compute instance-template list -v private
@@ -443,7 +444,7 @@ sizes_list() {
 }
 
 ###################################################################
-# experimental v2 function
+# fixed v2 function for Exoscale
 # deletes multiple instances at the same time by name, if the second argument is set to "true", will not prompt
 # used by axiom-rm --multi
 #
@@ -451,65 +452,61 @@ delete_instances() {
     local names="$1"
     local force="$2"
 
-    # Convert space-separated names string into array manually (portable)
+    # Convert space-separated string into array
     set -- $names
     name_array=("$@")
 
-    # Retrieve all instances
-    all_instances="$(instances)"
+    # Get all instance data once
+    all_instances="$(instances)"  # Should return full JSON array
 
     all_instance_ids=()
     all_instance_names=()
 
     for name in "${name_array[@]}"; do
-        instance_info="$(echo "$all_instances" | jq -r --arg name "$name" '.[] | select(.name | test($name))')"
-
-        if [ -n "$instance_info" ]; then
-            instance_id="$(echo "$instance_info" | jq -r '.id')"
-            instance_name="$(echo "$instance_info" | jq -r '.name')"
+        matches=$(echo "$all_instances" | jq -c --arg name "$name" '.[] | select(.name == $name)')
+        while IFS= read -r match; do
+            instance_id=$(echo "$match" | jq -r '.id')
+            instance_name=$(echo "$match" | jq -r '.name')
             all_instance_ids+=( "$instance_id" )
             all_instance_names+=( "$instance_name" )
-        else
+        done <<< "$matches"
+
+        if [ -z "$matches" ]; then
             echo -e "${BRed}Warning: No Exoscale instance found for the name '$name'.${Color_Off}"
         fi
     done
 
+    if [ ${#all_instance_ids[@]} -eq 0 ]; then
+        echo -e "${BRed}No matching instances to delete.${Color_Off}"
+        return 1
+    fi
+
     if [ "$force" = "true" ]; then
         echo -e "${Red}Deleting: ${all_instance_names[*]}...${Color_Off}"
-        i=0
-        while [ $i -lt ${#all_instance_names[@]} ]; do
-            instance_name="${all_instance_names[$i]}"
-            instance_id="${all_instance_ids[$i]}"
-            exo compute instance delete "$instance_id" -f -Q &
-            i=$((i + 1))
+        for ((i = 0; i < ${#all_instance_ids[@]}; i++)); do
+            exo compute instance delete "${all_instance_ids[$i]}" -f -Q &
         done
         wait
     else
-        confirmed_instance_ids=()
-        confirmed_instance_names=()
-        i=0
-        while [ $i -lt ${#all_instance_names[@]} ]; do
-            instance_name="${all_instance_names[$i]}"
+        confirmed_ids=()
+        confirmed_names=()
+        for ((i = 0; i < ${#all_instance_ids[@]}; i++)); do
             instance_id="${all_instance_ids[$i]}"
-            echo -n "Are you sure you want to delete $instance_name (y/N) - default NO: "
+            instance_name="${all_instance_names[$i]}"
+            echo -n "Are you sure you want to delete $instance_name (ID: $instance_id)? (y/N): "
             read -r ans
-            if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-                confirmed_instance_ids+=( "$instance_id" )
-                confirmed_instance_names+=( "$instance_name" )
+            if [[ "$ans" == "y" || "$ans" == "Y" ]]; then
+                confirmed_ids+=( "$instance_id" )
+                confirmed_names+=( "$instance_name" )
             else
-                echo "Deletion aborted for $instance_name."
+                echo "Skipping $instance_name"
             fi
-            i=$((i + 1))
         done
 
-        if [ ${#confirmed_instance_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting: ${confirmed_instance_names[*]}...${Color_Off}"
-            i=0
-            while [ $i -lt ${#confirmed_instance_names[@]} ]; do
-                instance_name="${confirmed_instance_names[$i]}"
-                instance_id="${confirmed_instance_ids[$i]}"
-                exo compute instance delete "$instance_id" -f -Q &
-                i=$((i + 1))
+        if [ ${#confirmed_ids[@]} -gt 0 ]; then
+            echo -e "${Red}Deleting: ${confirmed_names[*]}...${Color_Off}"
+            for id in "${confirmed_ids[@]}"; do
+                exo compute instance delete "$id" -f -Q &
             done
             wait
         else
@@ -529,7 +526,14 @@ create_instances() {
     local region="$3"
     local user_data="$4"
     local timeout="$5"
-    shift 5
+    local disk="$6"
+
+    # Default disk size to 20 if not provided
+    if [[ -z "$disk" || "$disk" == "null" ]]; then
+        disk="50"
+    fi
+
+    shift 6
 
     names=("$@")  # Remaining arguments are instance names
     pids_data=()  # Will store "pid:name:tmpfile"
@@ -553,6 +557,10 @@ create_instances() {
     keyid=$(exo compute ssh-key list -O text --output-template 'Name: {{.Name}} | Fingerprint: {{.Fingerprint}}' | grep "$sshkey_fingerprint" | awk '{print $2}')
     if [ -z "$keyid" ]; then
         keyid=$(exo compute ssh-key register "$sshkey" "$pubkey_path" -O text --output-template '{{.Name}}' 2>/dev/null)
+        if [ -z "$keyid" ]; then
+            keyid=$(exo compute ssh-key register axiom_rsa-"$(date +%m-%d-%y-%H-%S)" /home/user/.ssh/axiom_rsa.pub -O text --output-template '{{.Name}}')
+        fi
+
         if [ -z "$keyid" ]; then
             >&2 echo -e "${BRed}Error: Failed to create SSH key in Exoscale${Color_Off}"
             rm -f "$user_data_file"
@@ -582,6 +590,7 @@ create_instances() {
                 --instance-type "$size" \
                 --zone "$region" \
                 $security_group_option \
+                --disk-size "$disk" \
                 --ssh-key "$keyid" \
                 --cloud-init "$user_data_file" \
                 -O json 2>&1

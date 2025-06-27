@@ -234,11 +234,6 @@ get_image_id() {
 # Manage snapshots
 # used for axiom-images and axiom-backup
 #
-snapshots() {
-        doctl compute snapshot list -o json
-}
-
-# axiom-images
 get_snapshots()
 {
         doctl compute snapshot list
@@ -256,6 +251,50 @@ create_snapshot() {
         instance="$1"
 	snapshot_name="$2"
 	doctl compute droplet-action snapshot "$(instance_id $instance)" --snapshot-name "$snapshot_name"
+}
+
+# Transfer DO Snapshot Image to Missing Regions
+# Args: image_id, image_name, "region1 region2 region3 ..."
+transfer_snapshot() {
+    local image_id="$1"
+    local image="$2"
+    local regions_string="$3"
+    read -r -a regions <<< "$regions_string"
+    local max_jobs=40  # Optional: limit concurrency to 4
+
+    [[ -z "$image_id" || -z "$image" || ${#regions[@]} -eq 0 ]] && {
+        echo -e "${BRed}Error: Missing required arguments for region transfer.${Color_Off}"
+        return 1
+    }
+
+    local available_regions
+    available_regions=$(doctl compute image get "$image_id" -o json | jq -r '.[] | .regions[]')
+
+    wait_for_jobs() {
+        while [ "$(jobs -rp | wc -l)" -ge "$max_jobs" ]; do
+            sleep 1
+        done
+    }
+
+    for region in "${regions[@]}"; do
+        if [[ "$available_regions" != *"$region"* ]]; then
+            wait_for_jobs
+
+            (
+                echo -e "${BYellow}Transferring image '${BRed}$image${BYellow}' to '${BRed}$region${BYellow}'...${Color_Off}"
+
+                doctl compute image-action transfer "$image_id" --region "$region" --wait && {
+                    echo -e "${BGreen}Transfer to '$region' succeeded.${Color_Off}"
+                    sleep 90
+                } || {
+                    echo -e "${BRed}Transfer to '$region' failed.${Color_Off}"
+                    echo -e "${BRed}Check with 'axiom-region ls' or 'axiom-images ls'.${Color_Off}"
+                }
+            ) &
+        fi
+    done
+
+    wait
 }
 
 ###################################################################
@@ -382,7 +421,9 @@ create_instances() {
     region="$3"
     user_data="$4"
     timeout="$5"
-    shift 5
+    disk="$6"
+
+    shift 6
     names=("$@")  # Remaining arguments are instance names
 
     # Import or retrieve SSH key fingerprint

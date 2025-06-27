@@ -242,13 +242,13 @@ function gcp_setup() {
     # List available machine types in the selected zone
     gcloud compute machine-types list --zones $zone --format="table(name, description)" | tee /tmp/gcp-machine-types.txt
 
-    echo -e -n "${BWhite}Please enter the machine type: Default '$default_size_search', press enter \n>> ${Color_Off}"
+    echo -e -n "${Green}Please enter the machine type: Default '$default_size_search', press enter \n>> ${Color_Off}"
     read machine_type
 
     # Validate the machine type
     while ! grep -q "^$machine_type" /tmp/gcp-machine-types.txt; do
         echo -e "${BRed}Invalid machine type. Please select a valid machine type from the list.${Color_Off}"
-        echo -e -n "${BWhite}Please enter the machine type (e.g. 'n1-standard-1'): ${Color_Off}"
+        echo -e -n "${Green}Please enter the machine type (e.g. 'n1-standard-1'): ${Color_Off}"
         read machine_type
     done
 
@@ -260,10 +260,27 @@ function gcp_setup() {
         echo -e "${BGreen}Selected machine type: $machine_type${Color_Off}"
     fi
 
+    # Prompt for default disk size
+    echo -e -n "${Green}Please enter your default disk size in GB (10–65536) (you can always change this later with axiom-disks select \$size): Default '20', press enter \n>> ${Color_Off}"
+    read disk_size
+
+    # Validate or set default
+    if [[ -z "$disk_size" ]]; then
+        disk_size="20"
+        echo -e "${Blue}Selected default option '20GB'${Color_Off}"
+    fi
+
+    # Check if disk_size is a valid number and in range
+    while ! [[ "$disk_size" =~ ^[0-9]+$ ]] || (( disk_size < 10 || disk_size > 65536 )); do
+        echo -e "${BRed}Invalid disk size. Please enter a number between 10 and 65536.${Color_Off}"
+        echo -e -n "${Green}Please enter your default disk size in GB:\n>> ${Color_Off}"
+        read disk_size
+    done
+
     check_and_create_firewall_rule
 
     # Generate the profile data with the correct keys
-    data="$(echo "{\"service_account_key\":\"$service_account_key\",\"project\":\"$project_id\",\"physical_region\":\"$region\",\"default_size\":\"$machine_type\",\"region\":\"$zone\",\"provider\":\"gcp\"}")"
+    data="$(echo "{\"service_account_key\":\"$service_account_key\",\"project\":\"$project_id\",\"physical_region\":\"$region\",\"default_size\":\"$machine_type\",\"region\":\"$zone\",\"provider\":\"gcp\",\"default_disk_size\":\"$disk_size\"}")"
 
     echo -e "${BGreen}Profile settings below: ${Color_Off}"
     echo "$data" | jq '.gcp_service_account_key = "**********************"'

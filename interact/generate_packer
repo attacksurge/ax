@@ -33,20 +33,23 @@ if [ -f "$packer_builder_path" ]; then
 
  elif [[ "$extension" == "pkr.hcl" ]]; then
 
-  # Create beginning of Packer pkr.hcl file
-  jq -r 'keys[]' "$AXIOM_JSON" | while read -r key; do
-  cat <<EOF >> "$packer_output_path"
+   # Create beginning of Packer pkr.hcl file
+   builder_contents=$(<"$packer_builder_path")
+
+   # Skip vars already defined in builder
+   jq -r 'keys[]' "$AXIOM_JSON" | while read -r key; do
+     if ! grep -q "variable[[:space:]]*\"$key\"" <<< "$builder_contents"; then
+cat <<EOF >> "$packer_output_path"
 variable "$key" {
   type = string
-
 }
-
 EOF
-  done
+     fi
+   done
 
-  # cat the builder and provisioner fata into final packer pkr.hcl
-  cat "$packer_builder_path" "$packer_provisioner_path" >> "$packer_output_path"
-  echo "Merged Packer pkr.hcl data written to $packer_output_path"
+   # cat the builder and provisioner data into final packer pkr.hcl
+   cat "$packer_builder_path" "$packer_provisioner_path" >> "$packer_output_path"
+   echo "Merged Packer pkr.hcl data written to $packer_output_path"
 
  fi
 else

@@ -8,21 +8,37 @@ AXIOM_PATH="$HOME/.axiom"
 #  Needed for axiom-init
 create_instance() {
     name="$1"
-    image_id="$2"
+    image_id="$2"  # Can be a named image OR an instance snapshot ID
     size_slug="$3"
     region="$4"
     user_data="$5"
+    disk_size="$6"
+
+    if [[ -z "$disk_size" || "$disk_size" == "null" ]]; then
+        disk_size="20"
+    fi
 
     user_data_file=$(mktemp)
     echo "$user_data" > "$user_data_file"
 
+    # If it's a UUID, treat it as a server snapshot and use image=<snapshot_id>
+    if [[ "$image_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+        image_arg="image=${image_id}"
+        root_volume_arg=""
+    else
+        image_arg="image=${image_id}"
+        root_volume_arg="root-volume=local:${disk_size}GB"
+    fi
 
     scw instance server create name="$name" \
-        image="$image_id" \
+        "$image_arg" \
         type="$size_slug" \
         zone="$region" \
         cloud-init=@"$user_data_file" \
-        ip=new >/dev/null
+        ip=new \
+        $root_volume_arg >/dev/null
+
+    rm -f "$user_data_file"
     sleep 260
 }
 
@@ -274,12 +290,8 @@ sizes_list() {
 
 ###################################################################
 # Manage snapshots
-# Used for axiom-images and axiom-backup
-snapshots() {
-    scw instance image list -o json
-}
-
-# axiom-images
+# Used by axiom-images
+#
 get_snapshots() {
     scw instance image list
 }
@@ -368,12 +380,27 @@ create_instances() {
     region="$3"
     user_data="$4"
     timeout="$5"
-    shift 5
+    disk_size="$6"
+
+    if [[ -z "$disk_size" || "$disk_size" == "null" ]]; then
+        disk_size="20"
+    fi
+
+    shift 6
     names=("$@")  # Remaining arguments are instance names
 
     # Create temporary user data file
     user_data_file=$(mktemp)
     echo "$user_data" > "$user_data_file"
+
+    # If it's a UUID, treat it as a server snapshot and use image=<snapshot_id>
+    if [[ "$image_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+        image_arg="image=${image_id}"
+        root_volume_arg=""
+    else
+        image_arg="image=${image_id}"
+        root_volume_arg="root-volume=local:${disk_size}GB"
+    fi
 
     # Track instance creation statuses
     processed_file=$(mktemp)
@@ -390,7 +417,8 @@ create_instances() {
             type="$size_slug" \
             zone="$region" \
             cloud-init=@"$user_data_file" \
-            ip=new -o json 2>&1)
+            ip=new \
+            $root_volume_arg -o json 2>&1)
 
         if [ $? -eq 0 ]; then
             created_instances+=("$name")

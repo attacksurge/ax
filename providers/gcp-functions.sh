@@ -12,6 +12,12 @@ create_instance() {
     machine_type="$3"
     zone="$4"
     user_data="$5"
+    disk_size="$6"
+
+    # Default disk size to 20 if not provided
+    if [[ -z "$disk_size" || "$disk_size" == "null" ]]; then
+        disk_size="20"
+    fi
 
     gcloud compute instances create "$name" \
         --image "$image_id" \
@@ -19,6 +25,7 @@ create_instance() {
         --zone "$4" \
         --tags "axiom-ssh" \
         --metadata=user-data="$user_data" \
+        --boot-disk-size="${disk_size}GB" \
         --verbosity=error \
         --quiet 2> >(grep -v '^Created \[' >&2) > /dev/null
         sleep 260
@@ -75,18 +82,21 @@ instance_pretty() {
     instances_count=$(echo "$data" | jq -r '.[] | .name' | wc -l)
 
     totalPrice=0
-    header="Instance,External IP,Internal IP,Zone,Size,Status"
+    header="Instance,External IP,Internal IP,Zone,Size,Disk (GB),Status"
 
-    # Modify jq fields to extract just the relevant part of the zone and machine type
-    fields=".[] | [.name,
-                   .networkInterfaces[0].accessConfigs[0].natIP,
-                   .networkInterfaces[0].networkIP,
-                   (.zone | split(\"/\")[-1]),
-                   (.machineType | split(\"/\")[-1]),
-                   .status] | @csv"
+    # Extract necessary fields including disk size
+    fields=".[] | [
+        .name,
+        .networkInterfaces[0].accessConfigs[0].natIP,
+        .networkInterfaces[0].networkIP,
+        (.zone | split(\"/\")[-1]),
+        (.machineType | split(\"/\")[-1]),
+        .disks[0].diskSizeGb,
+        .status
+    ] | @csv"
 
     data=$(echo "$data" | jq -r "$fields")
-    totals="_,_,_,_,Instances,$instances_count"
+    totals="_,_,_,_,_,_,Instances,$instances_count"
 
     (echo "$header" && echo "$data" && echo "$totals") | sed 's/"//g' | column -t -s,
 }
@@ -244,10 +254,6 @@ get_image_id() {
 # Manage snapshots (updated to manage images, keeping function names the same)
 # Used by axiom-images and axiom-backup
 #
-snapshots() {
-    gcloud compute images list --no-standard-images --format=json
-}
-
 get_snapshots() {
     gcloud compute images list --no-standard-images
 }
@@ -412,7 +418,14 @@ create_instances() {
     zone="$3"
     user_data="$4"
     timeout="$5"
-    shift 5
+    disk="$6"
+
+    # Default disk to 20 if not provided
+    if [[ -z "$disk" || "$disk" == "null" ]]; then
+        disk="20"
+    fi
+
+    shift 6
     names=("$@")  # Remaining arguments are instance names
 
     # Track instance creation statuses
@@ -429,6 +442,7 @@ create_instances() {
         --zone "$zone" \
         --tags "axiom-ssh" \
         --metadata=user-data="$user_data" \
+        --boot-disk-size="${disk}GB" \
         --verbosity=error \
         --quiet \
         --format=none \

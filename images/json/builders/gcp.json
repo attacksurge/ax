@@ -1,4 +1,7 @@
 {
+  "variables": {
+    "default_disk_size": "20"
+  },
   "builders": [
     {
       "type": "googlecompute",
@@ -8,13 +11,13 @@
       "machine_type": "{{user `default_size`}}",
       "image_name": "{{user `snapshot_name`}}",
       "image_family": "axiom-images",
-      "source_image_family": "ubuntu-2004-lts",
+      "source_image_family": "ubuntu-2204-lts",
       "ssh_username": "root",
       "credentials_file": "{{user `service_account_key`}}",
       "network": "default",
       "subnetwork": "default",
       "use_internal_ip": false,
-      "disk_size": 20,
+      "disk_size": "{{user `default_disk_size`}}",
       "disk_type": "pd-ssd",
       "ssh_timeout": "10m"
     }

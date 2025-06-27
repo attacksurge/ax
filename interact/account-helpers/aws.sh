@@ -111,12 +111,20 @@ read region
 	 echo -e "${Blue}Selected default option '$default_region'${Color_Off}"
 	 region="$default_region"
         fi
-echo -e -n "${Green}Please enter your default size (you can always change this later with axiom-sizes select \$size): Default 't2.medium', press enter \n>> ${Color_Off}"
+
+echo -e -n "${Green}Please enter your default size (you can always change this later with axiom-sizes select \$size): Default 't2.micro', press enter \n>> ${Color_Off}"
 read size
 	if [[ "$size" == "" ]]; then
-	 echo -e "${Blue}Selected default option 't2.medium'${Color_Off}"
-         size="t2.medium"
+	 echo -e "${Blue}Selected default option 't2.micro'${Color_Off}"
+         size="t2.micro"
         fi
+
+echo -e -n "${Green}Please enter your default disk size in GB (you can always change this later with axiom-disks select \$disk_size): Default '20', press enter \n>> ${Color_Off}"
+read disk_size
+if [[ "$disk_size" == "" ]]; then
+  disk_size="20"
+  echo -e "${Blue}Selected default option '20'${Color_Off}"
+fi
 
 aws configure set default.region "$region"
 
@@ -150,10 +158,13 @@ if [[ "$SECURITY_GROUP" == "" ]]; then
   echo -e "${BGreen}No Security Group provided, will create a new one: '$SECURITY_GROUP' in each region.${Color_Off}"
 fi
 
+first_group_id=""
+first_owner_id=""
+
 for r in $all_regions; do
+(
   echo -e "\n${BGreen}--- Region: $r ---${Color_Off}"
 
-  # Check if the security group already exists in this region
   existing_group_id=$(aws ec2 describe-security-groups \
     --filters "Name=group-name,Values=$SECURITY_GROUP" \
     --region "$r" \
@@ -161,69 +172,75 @@ for r in $all_regions; do
     --output text 2>/dev/null)
 
   if [[ "$existing_group_id" == "None" ]] || [[ -z "$existing_group_id" ]]; then
-    # Create the security group in this region
     echo -e "${BGreen}Creating Security Group '$SECURITY_GROUP' in region $r...${Color_Off}"
     create_output=$(aws ec2 create-security-group \
       --group-name "$SECURITY_GROUP" \
       --description "Axiom SG" \
       --region "$r" 2>&1)
 
-    # If creation failed for any reason, log and continue to next region
     if [[ $? -ne 0 ]]; then
       echo -e "${BRed}Failed to create security group in region $r: $create_output${Color_Off}"
-      continue
+      exit 0
     fi
 
     new_group_id=$(echo "$create_output" | jq -r '.GroupId' 2>/dev/null)
     if [[ "$new_group_id" == "null" ]]; then
       echo -e "${BRed}Could not parse GroupId from creation output. Raw output:\n$create_output${Color_Off}"
-      continue
+      exit 0
     fi
 
     echo -e "${BGreen}Created Security Group: $new_group_id in region $r${Color_Off}"
-    last_group_id="$new_group_id"
+    group_id="$new_group_id"
   else
     echo -e "${BGreen}Security Group '$SECURITY_GROUP' already exists in region $r (GroupId: $existing_group_id).${Color_Off}"
-    last_group_id="$existing_group_id"
+    group_id="$existing_group_id"
   fi
 
-  # Attempt to add the rule (port 2266 for 0.0.0.0/0)
-  # If it already exists, AWS will throw an error that we can catch
-group_rules=$(aws ec2 authorize-security-group-ingress \
-  --group-id "$last_group_id" \
-  --protocol tcp \
-  --port 2266 \
-  --cidr 0.0.0.0/0 \
-  --region "$r" 2>&1
-)
-cmd_exit_status=$?
+ # Attempt to add the rule (port 2266 for 0.0.0.0/0)
+ # If it already exists, AWS will throw an error that we can catch
+  group_rules=$(aws ec2 authorize-security-group-ingress \
+    --group-id "$group_id" \
+    --protocol tcp \
+    --port 2266 \
+    --cidr 0.0.0.0/0 \
+    --region "$r" 2>&1)
+  cmd_exit_status=$?
 
-if [[ $cmd_exit_status -ne 0 ]]; then
-    # If AWS CLI returned an error code (non-zero), check if it's a duplicate rule
+  if [[ $cmd_exit_status -ne 0 ]]; then
     if echo "$group_rules" | grep -q "InvalidPermission.Duplicate"; then
-        echo -e "${BGreen}Ingress rule already exists in region $r.${Color_Off}"
+      echo -e "${BGreen}Ingress rule already exists in region $r.${Color_Off}"
     else
-        echo -e "${BRed}Failed to add rule in region $r: $group_rules${Color_Off}"
+      echo -e "${BRed}Failed to add rule in region $r: $group_rules${Color_Off}"
     fi
-else
-    # If $cmd_exit_status == 0, AWS CLI succeeded.
-    # Even though you get output JSON, "Return": true means success.
-    echo -e "${BGreen}Rule added successfully in region $r. Output:\n$group_rules${Color_Off}"
-fi
+  else
+    echo -e "${BGreen}Rule added successfully in region $r.${Color_Off}"
+  fi
 
-  # Fetch the owner ID for the newly found/created security group
   owner_id=$(aws ec2 describe-security-groups \
-    --group-ids "$last_group_id" \
+    --group-ids "$group_id" \
     --region "$r" \
     --query "SecurityGroups[*].OwnerId" \
     --output text 2>/dev/null)
 
-  # We'll overwrite group_owner_id each time so that, after the last region,
-  # we hold the last known group_owner_id. Typically, it's the same account ID.
-  group_owner_id="$owner_id"
+  if [[ -z "$first_group_id" ]]; then
+    echo "$group_id" > "$AXIOM_PATH/tmp/sg_id"
+    echo "$owner_id" > "$AXIOM_PATH/tmp/sg_owner"
+  fi
+) &
 done
+wait
 
-data="$(echo "{\"aws_access_key\":\"$ACCESS_KEY\",\"aws_secret_access_key\":\"$SECRET_KEY\",\"group_owner_id\":\"$group_owner_id\",\"security_group_name\":\"$SECURITY_GROUP\",\"security_group_id\":\"$last_group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\"}")"
+# Load stored first group id and owner id
+if [[ -f "$AXIOM_PATH/tmp/sg_id" ]]; then
+  last_group_id=$(cat "$AXIOM_PATH/tmp/sg_id")
+  group_owner_id=$(cat "$AXIOM_PATH/tmp/sg_owner")
+  rm "$AXIOM_PATH/tmp/sg_id" "$AXIOM_PATH/tmp/sg_owner"
+else
+  echo -e "${BRed}Could not determine final group ID. No group was created successfully.${Color_Off}"
+  exit 1
+fi
+
+data="$(echo "{\"aws_access_key\":\"$ACCESS_KEY\",\"aws_secret_access_key\":\"$SECRET_KEY\",\"group_owner_id\":\"$group_owner_id\",\"security_group_name\":\"$SECURITY_GROUP\",\"security_group_id\":\"$last_group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\",\"default_disk_size\":\"$disk_size\"}")"
 
 echo -e "${BGreen}Profile settings below: ${Color_Off}"
 echo "$data" | jq '.aws_secret_access_key = "*************************************"'

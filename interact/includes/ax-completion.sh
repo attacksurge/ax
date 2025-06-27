@@ -10,7 +10,7 @@ _ax_completions()
     local cur_word="${COMP_WORDS[COMP_CWORD]}"
 
     # List of commands that should trigger file completion
-    local file_completion_commands="account account account-setup build configure deploy exec fleet fleet2 images init ls power provider region rm scan scp select sizes ssh sync update"
+    local file_completion_commands="account account account-setup build configure deploy disks exec fleet fleet2 images init ls power provider region rm scan scp select sizes ssh sync update"
 
     # Check if the current command is in the list of those that should trigger file completion
     if [[ " ${file_completion_commands} " =~ " ${command} " ]]; then
@@ -18,7 +18,7 @@ _ax_completions()
         COMPREPLY=($(compgen -f -- ${cur_word}))
     else
         # List of all available commands for the 'ax' command
-        local commands="account account account-setup build configure deploy exec fleet fleet2 images init ls power provider region rm scan scp select sizes ssh sync update"
+        local commands="account account account-setup build configure deploy disks exec fleet fleet2 images init ls power provider region rm scan scp select sizes ssh sync update"
 
         # Generate possible completion matches for commands and store them in COMPREPLY
         COMPREPLY=($(compgen -W "${commands}" -- ${cur_word}))

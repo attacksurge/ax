@@ -246,17 +246,9 @@ get_image_id() {
 # Manage snapshots
 # used for axiom-images
 #
-# get JSON data for snapshots
-snapshots() {
-        linode-cli images list --json
-}
-
-# only displays private images
-# axiom-images
 get_snapshots() {
     linode-cli images list --is_public false
 }
-
 
 # Delete a snapshot by its name
 # axiom-images
@@ -379,7 +371,8 @@ create_instances() {
     region="$3"
     user_data="$4"
     timeout="$5"
-    shift 5
+    disk="$6"
+    shift 6
     names=("$@")  # Remaining arguments are instance names
 
     # Get the root password from axiom.json

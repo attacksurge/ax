@@ -244,11 +244,6 @@ get_image_id() {
 # Manage snapshots
 # used for axiom-images
 #
-snapshots() {
-        az image list --resource-group $resource_group
-}
-
-# axiom-images
 get_snapshots() {
         az image list --output table --resource-group $resource_group
 }
@@ -392,7 +387,8 @@ create_instances() {
     region="$3"
     user_data="$4"
     timeout="$5"
-    shift 5
+    disk="$6"
+    shift 6
     names=("$@")
 
     # Get SSH key from config

@@ -1,4 +1,7 @@
 {
+  "variables": {
+    "default_disk_size": "20"
+  },
   "builders": [
     {
       "access_key": "{{ user `aws_access_key` }}",
@@ -10,7 +13,7 @@
         {
           "device_name": "/dev/sda1",
           "volume_type": "gp2",
-          "volume_size": 20,
+          "volume_size": "{{ user `default_disk_size` }}",
           "encrypted": true,
           "delete_on_termination": true
         }

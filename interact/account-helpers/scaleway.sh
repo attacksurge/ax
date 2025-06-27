@@ -160,6 +160,13 @@ EOF
         size="DEV1-S"
     fi
 
+    echo -e -n "${Green}Please enter your default disk size in GB (you can always change this later with axiom-disks select \$disk_size): Default '20', press enter \n>> ${Color_Off}"
+    read disk_size
+    if [[ "$disk_size" == "" ]]; then
+        echo -e "${Blue}Using default disk size: '20'${Color_Off}"
+        disk_size="20"
+    fi
+
     data=$(cat <<EOF
 {
     "access_key": "$access_key",
@@ -169,7 +176,8 @@ EOF
     "default_project_id": "$default_project_id",
     "physical_region": "$physical_region",
     "provider": "scaleway",
-    "default_size": "$size"
+    "default_size": "$size",
+    "default_disk_size": "$disk_size"
 }
 EOF
     )
