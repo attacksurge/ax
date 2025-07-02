@@ -254,12 +254,6 @@ get_image_id() {
 # Manage snapshots
 # used for axiom-images
 #
-# get JSON data for snapshots
-# axiom-images
-snapshots() {
-        hcloud image list -t snapshot -o json
-}
-
 get_snapshots()
 {
         hcloud image list -t snapshot
@@ -424,7 +418,8 @@ create_instances() {
     local location="$3"
     local user_data="$4"
     local timeout="$5"
-    shift 5
+    local disk="$6"
+    shift 6
 
     names=("$@")
     pids_data=()   # Will store "pid:name:tmpfile"

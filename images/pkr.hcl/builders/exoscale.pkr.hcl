@@ -14,6 +14,11 @@ variable "snapshot_name" {
   type = string
 }
 
+variable "default_disk_size" {
+  type    = string
+  default = "50"
+}
+
 source "exoscale" "packer" {
   api_key                  = var.api_key
   api_secret               = var.api_secret
@@ -24,6 +29,7 @@ source "exoscale" "packer" {
   template_name            = var.snapshot_name
   template_username        = "op"
   ssh_username             = "root"
+  instance_disk_size       = var.default_disk_size
 }
 
 build {

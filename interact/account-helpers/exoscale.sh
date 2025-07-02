@@ -158,19 +158,27 @@ secret = '${api_secret}'
 EOF
 
 	# Check if credentials are valid
-    if exo limits &> /dev/null; then
-        echo -e "${BGreen}Exoscale account authenticated successfully.${Color_Off}"
-    else
-        echo -e "${Red}Exoscale account authentication failed. Please check your credentials.${Color_Off}"
-        exit 1
-    fi
-	
+	if exo limits &> /dev/null; then
+		echo -e "${BGreen}Exoscale account authenticated successfully.${Color_Off}"
+	else
+		echo -e "${Red}Exoscale account authentication failed. Please check your credentials.${Color_Off}"
+	exit 1
+	fi
+
 	sizes_list
 	echo -e -n "${BGreen}Please enter your default size (you can always change this later with axiom-sizes select \$size): Default 'standard.medium', press enter \n>> ${Color_Off}"
 	read size
 	if [[ "$size" == "" ]]; then
 		echo -e "${Blue}Selected default option 'standard.medium'${Color_Off}"
 		size="standard.medium"
+	fi
+
+	# Prompt for disk size
+	echo -e -n "${BGreen}Please enter your default disk size in GB (you can always change this later with ax disk set \$size): Default '50', press enter \n>> ${Color_Off}"
+	read disk_size
+	if [[ "$disk_size" == "" ]]; then
+		echo -e "${Blue}Selected default option '50'${Color_Off}"
+		disk_size="50"
 	fi
 
 	# Print available security groups
@@ -241,7 +249,7 @@ EOF
     	echo -e "${BGreen}Rules added successfully. Output:\n$(echo $group_rules | jq -r '.ingress_rules')${Color_Off}"
 	fi
 
-	data="$(echo "{\"api_key\":\"$api_key\",\"api_secret\":\"$api_secret\",\"security_group_name\":\"$SECURITY_GROUP\",\"security_group_id\":\"$the_group_id\",\"region\":\"$region\",\"provider\":\"exoscale\",\"default_size\":\"$size\"}")"
+	data="$(echo "{\"api_key\":\"$api_key\",\"api_secret\":\"$api_secret\",\"security_group_name\":\"$SECURITY_GROUP\",\"security_group_id\":\"$the_group_id\",\"region\":\"$region\",\"provider\":\"exoscale\",\"default_size\":\"$size\",\"default_disk_size\":\"$disk_size\"}")"
 
 	echo -e "${BGreen}Profile settings below: ${Color_Off}"
 	echo "$data" | jq '.api_secret = "*************************************"'

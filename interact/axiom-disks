@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+
+AXIOM_PATH="$HOME/.axiom"
+source "$AXIOM_PATH/interact/includes/vars.sh"
+source "$AXIOM_PATH/interact/includes/functions.sh"
+source "$AXIOM_PATH/interact/includes/system-notification.sh"
+
+# Centralized disk defaults
+DEFAULT_DISK_AWS=20
+DEFAULT_DISK_GCP=20
+DEFAULT_DISK_SCALEWAY=20
+DEFAULT_DISK_EXOSCALE=50
+DEFAULT_DISK_IBM=100
+
+account_path=$(ls -la "$AXIOM_PATH/axiom.json" | rev | cut -d " " -f 1 | rev)
+accounts=$(ls -l "$AXIOM_PATH/accounts/" | grep "json" | grep -v 'total ' | awk '{ print $9 }' | sed 's/\.json//g')
+current=$(ls -lh "$AXIOM_PATH/axiom.json" | awk '{ print $11 }' | tr '/' '\n' | grep json | sed 's/\.json//g') > /dev/null 2>&1
+provider="$(jq -r ".provider" "$AXIOM_PATH/axiom.json")"
+
+usage() {
+    echo -e "${BWhite}Usage:${Color_Off} ax disk [COMMAND] [OPTIONS]"
+    echo
+    echo -e "${BWhite}Description:${Color_Off}"
+    echo -e "  Manage the default boot disk size for Ax instances."
+    echo
+    echo -e "${BWhite}Supported Providers:${Color_Off}"
+    echo -e "  Supports: aws, gcp, scaleway, exoscale"
+    echo -e "  Other providers use fixed disk sizes tied to the instance type. Use '${BGreen}ax sizes${Color_Off}' to view options."
+    echo
+    echo -e "${BWhite}Commands:${Color_Off}"
+    echo -e "  get | show               Display the current default disk size (from axiom.json)"
+    echo -e "  select <size>            Set a new default disk size in GB (e.g., 50, 100)"
+    echo -e "  default                  Reset disk size to the default for your provider"
+    echo -e "  ls                       Show valid disk size ranges for the current provider"
+    echo
+    echo -e "${BWhite}Options:${Color_Off}"
+    echo -e "  --help                   Show this help menu"
+    echo
+    echo -e "${BWhite}Examples:${Color_Off}"
+    echo -e "  ${BGreen}ax disks get${Color_Off}              # Show current disk size"
+    echo -e "  ${BGreen}ax disks select 100${Color_Off}       # Set disk size to 100GB"
+    echo -e "  ${BGreen}ax disks default${Color_Off}          # Reset disk size to provider default"
+    echo -e "  ${BGreen}ax disks ls${Color_Off}               # Show valid disk size range"
+    echo
+}
+
+supports_disk() {
+    case "$provider" in
+        aws|gcp|scaleway|exoscale) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+get_default_disk_size() {
+    case "$provider" in
+        aws) echo "$DEFAULT_DISK_AWS" ;;
+        gcp) echo "$DEFAULT_DISK_GCP" ;;
+        scaleway) echo "$DEFAULT_DISK_SCALEWAY" ;;
+        exoscale) echo "$DEFAULT_DISK_EXOSCALE" ;;
+        *) echo "" ;;
+    esac
+}
+
+valid_disk_size() {
+    local size=$1
+    case "$provider" in
+        aws) [[ $size -ge 1 && $size -le 65536 ]] ;;
+        gcp) [[ $size -ge 10 && $size -le 65536 ]] ;;
+        scaleway) [[ $size -ge 10 && $size -le 600 ]] ;;
+        exoscale) [[ $size -ge 10 && $size -le 51200 ]] ;;
+        *) return 1 ;;
+    esac
+}
+
+set_disk_size() {
+    jq --arg disk "$1" '.default_disk_size = $disk' "$account_path" > "$AXIOM_PATH/tmp.json" \
+        && mv "$AXIOM_PATH/tmp.json" "$account_path"
+}
+
+print_unsupported_provider_message() {
+    echo -e "${Red}Your provider does not support disk sizing.${Color_Off}"
+    echo -e "Use '${BGreen}ax sizes${Color_Off}' to select an instance type with a predefined disk size."
+}
+
+[[ "$@" == "--help" || "$@" == "-h" || -z "$@" ]] && usage && exit 0
+
+cmd="$1"
+arg="$2"
+
+case "$cmd" in
+    get|show)
+        if supports_disk; then
+            size=$(jq -r .default_disk_size "$account_path")
+            [[ -z "$size" || "$size" == "null" ]] && {
+                echo -e "${Red}No default disk size set. Use 'ax disks select <size>' to configure.${Color_Off}"
+                exit 1
+            }
+            echo "$size"
+        else
+            print_unsupported_provider_message
+            size="$(jq -r .default_size "$account_path")"
+            echo -e "Default instance size: $size"
+        fi
+        ;;
+
+    select)
+        supports_disk || { print_unsupported_provider_message; exit 1; }
+
+        [[ -z "$arg" ]] && {
+            echo -e "${Red}No disk size provided. Usage: ax disks select <size>${Color_Off}"
+            exit 1
+        }
+
+        arg=$(echo "$arg" | tr -cd '[:digit:]')
+
+        valid_disk_size "$arg" || {
+            current=$(jq -r .default_disk_size "$account_path")
+            echo -e "${Red}Invalid disk size for provider '$provider'.${Color_Off}"
+            echo -e "  Current: ${current}GB"
+            echo -e "  Run 'ax disks ls' to see supported sizes."
+            exit 1
+        }
+
+        set_disk_size "$arg"
+        echo -e "${Green}Default disk size set to ${arg}GB.${Color_Off}"
+        ;;
+
+    default)
+        supports_disk || { print_unsupported_provider_message; exit 1; }
+
+        disk="$(get_default_disk_size)"
+        [[ -z "$disk" ]] && {
+            echo "Unknown provider. Cannot reset."
+            exit 1
+        }
+
+        set_disk_size "$disk"
+        echo -e "${Green}Default disk size reset to ${disk}GB.${Color_Off}"
+        ;;
+
+    ls)
+        supports_disk || { print_unsupported_provider_message; exit 1; }
+
+        current=$(jq -r .default_disk_size "$account_path")
+        default=$(get_default_disk_size)
+
+        echo -e "Current disk size: ${current}GB"
+        echo -e "Provider default:  ${default}GB"
+        echo
+
+        echo -e "${Green}Recommended disk sizes for provider '$provider':${Color_Off}"
+        case "$provider" in
+            aws)       echo -e "Choose boot disk size between 1GB and 65536GB (64TiB)." ;;
+            gcp)       echo -e "Choose boot disk size between 10GB and 65536GB (64TiB)." ;;
+            scaleway)  echo -e "Choose boot disk size between 10GB and 600GB." ;;
+            exoscale)  echo -e "Choose boot disk between 10GB and 51200GB (50TiB)." ;;
+        esac
+
+        echo -e "\nExamples:"
+        echo -e "  ax disks select 50"
+        echo -e "  ax disks select 100"
+        echo -e "  ax disks select 200"
+        ;;
+
+    *)
+        usage
+        ;;
+esac

@@ -32,7 +32,7 @@ help() {
     echo -e "  configure                  Run Ax configuration (install dependencies, set up environment)"
     echo -e "  build [provisioner]        Build a base image with pre-installed tools (using Packer)"
     echo
-    echo -e "${BGreen}Instance Management:${Color_Off}"
+    echo -e "${BGreen}Instance Lifecycle Management:${Color_Off}"
     echo -e "  init [options]             Launch a single cloud instance (use --run to auto-generate a random name)"
     echo -e "  fleet [options]            Spin up a fleet of multiple instances (with optional count, regions)"
     echo -e "  fleet2 [options]           A faster but experimental axiom-fleet"
@@ -44,9 +44,10 @@ help() {
     echo -e "  rm <pattern>               Terminate (destroy) instances matching name or pattern"
     echo -e "  power <on|off> <pattern>   Power on or off instances matching pattern"
     echo
-    echo -e "${BGreen}Image & Size Management:${Color_Off}"
+    echo -e "${BGreen}Instance Configuration Management:${Color_Off}"
     echo -e "  images                     Manage instance snapshots (list, create, select, delete images)"
     echo -e "  sizes                      Manage default instance size (list, select, restore default size)"
+    echo -e "  disks                      Manage default boot disk size (list, select, restore default disk size)"
     echo
     echo -e "${BGreen}Regions:${Color_Off}"
     echo -e "  region                     Manage default region (list available, select default)"

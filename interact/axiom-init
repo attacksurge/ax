@@ -26,6 +26,7 @@ region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
 size="$(jq -r '.default_size' "$AXIOM_PATH"/axiom.json)"
 image="$(jq -r '.imageid' "$AXIOM_PATH"/axiom.json)"
 sshkey="$(jq -r '.sshkey' "$AXIOM_PATH"/axiom.json)"
+disk="$(jq -r '.default_disk_size' "$AXIOM_PATH"/axiom.json)"
 box_name=""
 connect_shell=false
 deploy=false
@@ -87,6 +88,7 @@ function usage() {
     echo -e "  --image <name>           Use a specific image (default from axiom config)"
     echo -e "  --region <region>        Use a specific region (default from axiom config)"
     echo -e "  --size <size>            Set instance size (default from axiom config)"
+    echo -e "  --disk <int>             Set instance default boot disk size (default from axiom config)"
     echo
     echo -e "${BWhite}Provisioning:${Color_Off}"
     echo -e "  --deploy <profile>       Deploy a profile after init (e.g. desktop, openvpn)"
@@ -166,6 +168,13 @@ do
         if [[ "$arg" == "--size" ]] ; then
             n=$((i+1))
             size=$(echo ${!n})
+            set=true
+            pass+=($i)
+            pass+=($n)
+        fi
+        if [[ "$arg" == "--disk" ]] ; then
+            n=$((i+1))
+            disk=$(echo ${!n})
             set=true
             pass+=($i)
             pass+=($n)
@@ -273,7 +282,7 @@ clean_up() {
 if [ $quiet == "true" ]
 then
     trap 'clean_up' SIGINT
-    create_instance "$name" "$image_id" "$size" "$region" "$user_data" &
+    create_instance "$name" "$image_id" "$size" "$region" "$user_data" "$disk" &
     PID="$!"
     waitabit "$PID"
     sleep 20
@@ -295,7 +304,7 @@ sleep 5
 region_transfer
 mkdir -p "$AXIOM_PATH/tmp/"
 trap 'clean_up' SIGINT
-create_instance "$name" "$image_id" "$size" "$region" "$user_data" &
+create_instance "$name" "$image_id" "$size" "$region" "$user_data" "$disk" &
 
 PID="$!"
 "$NOTIFY_CMD" "Axiom Info" "Initializing '$name'..."

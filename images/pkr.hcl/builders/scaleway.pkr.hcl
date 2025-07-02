@@ -14,6 +14,11 @@ variable "snapshot_name" {
   type = string
 }
 
+variable "default_disk_size" {
+  type    = number
+  default = 20
+}
+
 source "scaleway" "packer" {
   project_id = var.default_project_id
   access_key = var.access_key
@@ -26,7 +31,7 @@ source "scaleway" "packer" {
   snapshot_name = var.snapshot_name
   remove_volume = "true"
   root_volume {
-    size_in_gb = 25
+    size_in_gb = var.default_disk_size
   }
 }
 

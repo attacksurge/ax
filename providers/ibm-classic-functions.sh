@@ -258,11 +258,6 @@ delete_snapshot() {
 }
 
 # axiom-images
-snapshots() {
-        ibmcloud sl image list --output json --private
-}
-
-# axiom-images
 create_snapshot() {
         instance="$1"
         snapshot_name="$2"
@@ -392,7 +387,8 @@ create_instances() {
     region="$3"
     user_data="$4"
     timeout="$5"
-    shift 5
+    disk="$6"
+    shift 6
     names=("$@")  # Remaining arguments are instance names
 
     cpu="$(jq -r '.cpu' "$AXIOM_PATH/axiom.json")"

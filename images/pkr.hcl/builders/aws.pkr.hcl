@@ -14,6 +14,11 @@ variable "snapshot_name" {
   type = string
 }
 
+variable "default_disk_size" {
+  type    = number
+  default = 20
+}
+
 source "amazon-ebs" "packer" {
   access_key = var.aws_access_key
   secret_key = var.aws_secret_access_key
@@ -24,7 +29,7 @@ source "amazon-ebs" "packer" {
   launch_block_device_mappings {
     device_name           = "/dev/sda1"
     volume_type           = "gp2"
-    volume_size           = 20
+    volume_size           = var.default_disk_size
     encrypted             = true
     delete_on_termination = true
   }

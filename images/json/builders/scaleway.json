@@ -1,4 +1,7 @@
 {
+  "variables": {
+    "default_disk_size": "20"
+  },
   "builders": [
     {
       "type": "scaleway",
@@ -11,7 +14,10 @@
       "ssh_username": "root",
       "image_name": "{{user `snapshot_name`}}",
       "snapshot_name": "{{user `snapshot_name`}}",
-      "remove_volume": true
+      "remove_volume": true,
+      "root_volume": {
+        "size_in_gb": "{{user `default_disk_size`}}"
+      }
     }
   ]
 }

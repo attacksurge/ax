@@ -1,4 +1,7 @@
 {
+  "variables": {
+    "default_disk_size": "50"
+  },
   "builders": [
     {
       "type": "exoscale",
@@ -10,7 +13,8 @@
       "template_zones": ["{{ user `region` }}"],
       "template_name": "{{ user `snapshot_name` }}",
       "template_username": "op",
-      "ssh_username": "root"
+      "ssh_username": "root",
+      "instance_disk_size": "{{ user `default_disk_size` }}"
     }
   ]
 }

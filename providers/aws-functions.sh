@@ -12,6 +12,15 @@ create_instance() {
     size="$3"
     region="$4"
     user_data="$5"
+    disk="$6"
+
+    # Default disk size to 20 if not provided
+    if [[ -z "$disk" || "$disk" == "null" ]]; then
+        disk="20"
+    fi
+
+    disk_option="--block-device-mappings DeviceName=/dev/xvda,Ebs={VolumeSize=$disk,VolumeType=gp2,DeleteOnTermination=true}"
+
     security_group_name="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_name')"
     security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
 
@@ -33,7 +42,8 @@ create_instance() {
         --region "$region" \
         $security_group_option \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" \
-        --user-data "$user_data" 2>&1 >> /dev/null
+        --user-data "$user_data" \
+        $disk_option 2>&1 >> /dev/null
 
      if [[ $? -ne 0 ]]; then
         echo "Error: Failed to launch instance '$name' in region '$region'."
@@ -45,29 +55,55 @@ create_instance() {
 }
 
 ###################################################################
-# deletes instance, if the second argument is set to "true", will not prompt
+# deletes an instance. if the second argument is "true", will not prompt.
 # used by axiom-rm
 #
 delete_instance() {
-    name="$1"
-    id="$(instance_id "$name")"
+    local name="$1"
+    local force="$2"
 
-    if [ "$force" != "true" ]; then
-        read -p "Are you sure you want to delete instance '$name'? (y/N): " confirm
+    instance_data="$(instance_id "$name" --get-region)" || {
+        echo "Instance not found."
+        return 1
+    }
+
+    id=$(echo "$instance_data" | awk '{print $1}')
+    region=$(echo "$instance_data" | awk '{print $2}')
+
+    if [[ "$force" != "true" ]]; then
+        read -p "Delete '$name' ($id in $region)? (y/N): " confirm
         if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-            echo "Instance deletion aborted."
+            echo "Aborted."
             return 1
         fi
     fi
 
-    aws ec2 terminate-instances --instance-ids "$id" 2>&1 >> /dev/null
+    if aws ec2 terminate-instances --instance-ids "$id" --region "$region" >/dev/null 2>&1; then
+        echo "Deleted '$name' ($id) in $region."
+    else
+        echo "Failed to delete '$name'."
+    fi
 }
 
 ###################################################################
 # Instances functions
 # used by many functions in this file
 instances() {
-        aws ec2 describe-instances
+    local tempdir
+    tempdir=$(mktemp -d)
+    local regions
+    regions=$(aws ec2 describe-regions --query "Regions[].RegionName" --output text)
+
+    # Fetch describe-instances for each region in parallel
+    for region in $regions; do
+        aws ec2 describe-instances --region "$region" --output json > "$tempdir/$region.json" &
+    done
+    wait
+
+    # Merge all Reservations into one global array
+    jq -s '{Reservations: map(.Reservations[]) }' "$tempdir"/*.json
+
+    rm -rf "$tempdir"
 }
 
 # takes one argument, name of instance, returns raw IP address
@@ -84,15 +120,24 @@ instance_list() {
 
 # used by axiom-ls
 instance_pretty() {
-    costs=$(curl -sL 'ec2.shop' -H 'accept: json')
+    local costs header fields data numInstances types totalCost updatedData footer
+
+    costs=$(curl -sL 'https://ec2.shop' -H 'accept: json')
     header="Instance,Primary IP,Backend IP,Region,Type,Status,\$/M"
-    fields=".Reservations[].Instances[]
-             | select(.State.Name != \"terminated\")
-             | [(.Tags?[]? | select(.Key == \"Name\") | .Value), .PublicIpAddress, .PrivateIpAddress,
-                .Placement.AvailabilityZone, .InstanceType, .State.Name]
-             | @csv"
+    fields='.Reservations[].Instances[]
+        | select(.State.Name != "terminated")
+        | [
+            (.Tags?[]? | select(.Key == "Name") | .Value) // "N/A",
+            (.PublicIpAddress // "N/A"),
+            (.PrivateIpAddress // "N/A"),
+            (.Placement.AvailabilityZone // "N/A"),
+            (.InstanceType // "N/A"),
+            (.State.Name // "N/A")
+          ]
+        | @csv'
 
     data=$(instances | jq -r "$fields" | sort -k1)
+    data=$(echo "$data" | awk -F',' 'NF>=6')  # Filter to only rows with 6 fields
     numInstances=$(echo "$data" | grep -v '^$' | wc -l)
 
     if [[ $numInstances -gt 0 ]]; then
@@ -101,15 +146,12 @@ instance_pretty() {
         updatedData=""
 
         while read -r type; do
-            # Strip any extra quotes from the instance type
             type=$(echo "$type" | tr -d '"')
 
-            # Fetch monthly cost from the JSON API, default to 0 if not found
-            cost=$(echo "$costs" \
-                   | jq -r ".Prices[] | select(.InstanceType == \"$type\").MonthlyPrice")
+            # Fetch monthly cost for this instance type
+            cost=$(echo "$costs" | jq -r ".Prices[] | select(.InstanceType == \"$type\").MonthlyPrice")
             cost=${cost:-0}
 
-            # Match lines containing the quoted type in the CSV data
             typeData=$(echo "$data" | grep ",\"$type\",")
 
             # Append cost to each matching row
@@ -117,16 +159,17 @@ instance_pretty() {
                 updatedData+="$row,\"$cost\"\n"
             done <<< "$typeData"
 
-            # Update total cost based on count of matching rows
+            # Calculate running total cost
             typeCount=$(echo "$typeData" | grep -v '^$' | wc -l)
             totalCost=$(echo "$totalCost + ($cost * $typeCount)" | bc)
         done <<< "$types"
 
-        # Replace original data with updated rows (removing any empty lines)
+        # Clean final data
         data=$(echo -e "$updatedData" | sed '/^\s*$/d')
     fi
 
     footer="_,_,_,Instances,$numInstances,Total,\$$totalCost"
+
     (echo "$header"; echo "$data"; echo "$footer") \
         | sed 's/"//g' \
         | column -t -s,
@@ -273,54 +316,107 @@ query_instances() {
 }
 
 ###################################################################
+# used by axiom-fleet, axiom-init, axiom-images
 #
-# used by axiom-fleet axiom-init
 get_image_id() {
+    local tempdir
     query="$1"
     region="${2:-$(jq -r '.region' "$AXIOM_PATH"/axiom.json)}"
+    all_regions="$3"
 
-    if [[ -z "$region" || "$region" == "null" ]]; then
-        echo "Error: No region specified and no default region found in axiom.json."
+    if [[ "$all_regions" == "--all-regions" ]]; then
+        tempdir=$(mktemp -d)
+        for r in $(aws ec2 describe-regions --query "Regions[].RegionName" --output text); do
+            (
+                aws ec2 describe-images --owners self --region "$r" \
+                    --query "Images[*].[Name,ImageId]" --output json \
+                | jq -r --arg query "$query" --arg region "$r" '.[] | select(.[0] | startswith($query)) | "\(. [1]) \($region)"' > "$tempdir/$r.txt"
+            ) &
+        done
+        wait
+        cat "$tempdir"/*.txt
+        rm -rf "$tempdir"
+    else
+        if [[ -z "$region" || "$region" == "null" ]]; then
+            echo "Error: No region specified and no default region found in axiom.json."
+            return 1
+        fi
+        aws ec2 describe-images --owners self --region "$region" \
+            --query "Images[*].[Name,ImageId]" --output json \
+        | jq -r --arg query "$query" '.[] | select(.[0] | startswith($query)) | .[1]'
+    fi
+}
+
+# Manage snapshots used for axiom-images
+get_snapshots() {
+    local tempdir
+    tempdir=$(mktemp -d)
+    printf "%-40s %-8s %-s\n" "Name" "Size(GB)" "Regions"
+
+    for region in $(aws ec2 describe-regions --query "Regions[].RegionName" --output text); do
+        (
+            aws ec2 describe-images --owners self --region "$region" \
+                --query "Images[*].[Name,BlockDeviceMappings[0].Ebs.VolumeSize]" --output text \
+            | awk -v r="$region" '{OFS="\t"; print $1, $2, r}' > "$tempdir/$region.txt"
+        ) &
+    done
+    wait
+
+    awk -F'\t' '
+        {
+            key=$1 FS $2
+            region_map[key]=(region_map[key] ? region_map[key] " " $3 : $3)
+        }
+        END {
+            for (k in region_map) {
+                split(k, f, FS)
+                split(region_map[k], r, " ")
+                asort(r)
+                regions=""
+                limit=3
+                for (i=1; i<=length(r) && i<=limit; i++) regions=(regions ? regions " " : "") r[i]
+                extra=(length(r)>limit) ? " (+ " (length(r)-limit) " more)" : ""
+                printf "%-40s %-8s [%s%s]\n", f[1], f[2], regions, extra
+            }
+        }
+        function asort(arr,   i,j,t) {
+            for(i=1;i<=length(arr);i++) for(j=i+1;j<=length(arr);j++) if(arr[i]>arr[j]) {t=arr[i];arr[i]=arr[j];arr[j]=t}
+        }
+    ' "$tempdir"/*.txt | sort
+
+    rm -rf "$tempdir"
+}
+
+# Delete snapshot(s) by name across many regions, used by axiom-images
+delete_snapshot() {
+    name="$1"
+    tempdir=$(mktemp -d)
+
+    get_image_id "$name" "" --all-regions > "$tempdir/images.txt"
+
+    if [[ ! -s "$tempdir/images.txt" ]]; then
+        echo "No images found matching '$name'."
+        rm -rf "$tempdir"
         return 1
     fi
 
-    # Fetch images in the specified region
-    images=$(aws ec2 describe-images --region "$region" --query 'Images[*]' --owners self)
+    while read -r image_id region; do
+        (
+            snapshot_id=$(aws ec2 describe-images --region "$region" --image-ids "$image_id" \
+                --query 'Images[*].BlockDeviceMappings[*].Ebs.SnapshotId' --output text)
 
-    # Get the most recent image matching the query
-    name=$(echo "$images" | jq -r '.[].Name' | grep -wx "$query" | tail -n 1)
-    id=$(echo "$images" | jq -r ".[] | select(.Name==\"$name\") | .ImageId")
+            echo -e "${Red}Deregistering image $image_id in $region...${Color_Off}"
+            aws ec2 deregister-image --image-id "$image_id" --region "$region" >/dev/null 2>&1
 
-    echo "$id"
-}
+            if [[ -n "$snapshot_id" ]]; then
+                echo -e "${Red}Deleting snapshot $snapshot_id in $region...${Color_Off}"
+                aws ec2 delete-snapshot --snapshot-id "$snapshot_id" --region "$region" >/dev/null 2>&1
+            fi
+        ) &
+    done < "$tempdir/images.txt"
+    wait
 
-###################################################################
-# Manage snapshots
-# used for axiom-images
-#
-# get JSON data for snapshots
-snapshots() {
-        aws ec2 describe-images --query 'Images[*]' --owners self
-}
-
-# used by axiom-images
-get_snapshots()
-{
-    header="Name,Creation,Image ID,Size(GB)"
-    footer="_,_,_,_"
-    fields=".[] | [.Name, .CreationDate, .ImageId, (.BlockDeviceMappings[] | select(.Ebs) | (.Ebs.VolumeSize | tostring))] | @csv"
-    data=$(aws ec2 describe-images --query 'Images[*]' --owners self)
-        (echo "$header" && echo "$data" | (jq -r "$fields"|sort -k1) && echo "$footer") | sed 's/"//g' | column -t -s,
-}
-
-# Delete a snapshot by its name
-# used by  axiom-images
-delete_snapshot() {
-    name="$1"
-    image_id=$(get_image_id "$name")
-    snapshot_id="$(aws ec2 describe-images --image-id "$image_id" --query 'Images[*].BlockDeviceMappings[*].Ebs.SnapshotId' --output text)"
-    aws ec2 deregister-image --image-id "$image_id"
-    aws ec2 delete-snapshot --snapshot-id "$snapshot_id"
+    rm -rf "$tempdir"
 }
 
 # axiom-images
@@ -328,6 +424,78 @@ create_snapshot() {
         instance="$1"
         snapshot_name="$2"
 	aws ec2 create-image --instance-id "$(instance_id $instance)" --name $snapshot_name
+}
+
+# transfer-image to new region (init, fleet, fleet2)
+transfer_snapshot() {
+    local image_id="$1" image="$2" regions_string="$3"
+    read -r -a regions <<< "$regions_string"
+    local max_jobs=50
+
+    [[ -z "$image_id" || -z "$image" || "${#regions[@]}" -eq 0 ]] && {
+        echo -e "${BRed}Error: Missing arguments for AWS region transfer.${Color_Off}"
+        return 1
+    }
+
+    local source_region
+    source_region="$(jq -r '.region' "$AXIOM_PATH/axiom.json")"
+
+    wait_for_jobs() {
+        while [ "$(jobs -rp | wc -l)" -ge "$max_jobs" ]; do
+            sleep 1
+        done
+    }
+
+    for region in "${regions[@]}"; do
+        wait_for_jobs
+
+        (
+            existing_ami_id=$(aws ec2 describe-images --region "$region" --owners self \
+                --filters "Name=name,Values=$image" --query 'Images[0].ImageId' --output text) || true
+
+            if [[ -z "$existing_ami_id" || "$existing_ami_id" == "None" ]]; then
+                echo -e "${BYellow}Transferring '${BRed}$image${BYellow}' to '${BRed}$region${BYellow}'...${Color_Off}"
+
+                copied_ami_id=$(aws ec2 copy-image \
+                    --source-image-id "$image_id" --source-region "$source_region" \
+                    --region "$region" --name "$image" \
+                    --description "Copied from $source_region:$image_id" \
+                    --query 'ImageId' --output text)
+
+                if [[ -z "$copied_ami_id" || "$copied_ami_id" == "None" ]]; then
+                    echo -e "${BRed}Failed to copy image to '$region'.${Color_Off}"
+                    exit 0
+                fi
+
+                # Poll every 15 seconds for up to 10 minutes
+                max_wait=600
+                interval=15
+                elapsed=0
+
+                while [ "$elapsed" -lt "$max_wait" ]; do
+                    state=$(aws ec2 describe-images \
+                        --region "$region" \
+                        --image-ids "$copied_ami_id" \
+                        --query 'Images[0].State' --output text 2>/dev/null)
+
+                    if [[ "$state" == "available" ]]; then
+                        echo -e "${BGreen}Copy to '$region' succeeded.${Color_Off}"
+                        exit 0
+                    elif [[ "$state" == "failed" ]]; then
+                        echo -e "${BRed}Copy to '$region' failed permanently.${Color_Off}"
+                        exit 1
+                    fi
+
+                    sleep "$interval"
+                    elapsed=$((elapsed + interval))
+                done
+
+                echo -e "${BRed}Copy to '$region' timed out after $max_wait seconds.${Color_Off}"
+            fi
+        ) &
+    done
+
+    wait
 }
 
 ###################################################################
@@ -368,8 +536,14 @@ reboot() {
 
 # axiom-power axiom-images
 instance_id() {
-	name="$1"
-	instances | jq -r ".Reservations[].Instances[] | select(.State.Name != \"terminated\") | select(.Tags?[]? | select(.Key == \"Name\" and .Value == \"$name\")) | .InstanceId"
+    local name="$1" mode="$2"
+    local filter=".Reservations[].Instances[] | select(.State.Name != \"terminated\") | select(.Tags[]? | select(.Key == \"Name\" and .Value == \"$name\"))"
+
+    if [[ "$mode" == "--get-region" ]]; then
+        instances | jq -r "$filter | [.InstanceId, (.Placement.AvailabilityZone | sub(\"[a-z]$\"; \"\"))] | @tsv"
+    else
+        instances | jq -r "$filter | .InstanceId"
+    fi
 }
 
 ###################################################################
@@ -404,58 +578,77 @@ BEGIN {
 # used by axiom-rm --multi
 #
 delete_instances() {
-    names="$1"
-    force="$2"
-    instance_ids=()
-    instance_names=()
+    local names="$1"
+    local force="$2"
+    local tempdir
+    tempdir=$(mktemp -d)
+    instance_info_list=()
 
-    # Convert names to an array for processing
     name_array=($names)
 
-    # Make a single AWS CLI call to get all instances and filter by provided names
-    all_instances=$(aws ec2 describe-instances --query "Reservations[*].Instances[*].[InstanceId, Tags[?Key=='Name'].Value | [0]]" --output text)
+    local regions
+    regions=$(aws ec2 describe-regions --query "Regions[].RegionName" --output text)
 
-    # Iterate over the AWS CLI output and filter by the provided names
-    while read -r instance_id instance_name; do
-        for name in "${name_array[@]}"; do
-            if [[ "$instance_name" == "$name" ]]; then
-                instance_ids+=("$instance_id")
-                instance_names+=("$instance_name")
-            fi
-        done
-    done <<< "$all_instances"
+    # Fetch minimized instance data per region in parallel
+    for region in $regions; do
+        (
+            aws ec2 describe-instances --region "$region" \
+                --query "Reservations[].Instances[].{InstanceId: InstanceId, Name: Tags[?Key=='Name']|[0].Value, State: State.Name, AZ: Placement.AvailabilityZone}" \
+                --output json > "$tempdir/$region.json" 2>/dev/null
+        ) &
+    done
+    wait
 
-    # Force deletion: Delete all instances without prompting
-    if [ "$force" == "true" ]; then
-        echo -e "${Red}Deleting: ${instance_names[@]}...${Color_Off}"
-        aws ec2 terminate-instances --instance-ids "${instance_ids[@]}" >/dev/null 2>&1
-
-    # Prompt for each instance if force is not true
-    else
-        # Collect instances for deletion after user confirmation
-        confirmed_instance_ids=()
-        confirmed_instance_names=()
-
-        for i in "${!instance_ids[@]}"; do
-            instance_id="${instance_ids[$i]}"
-            instance_name="${instance_names[$i]}"
-
-            echo -e -n "Are you sure you want to delete instance '$instance_name' (ID: $instance_id) (y/N) - default NO: "
-            read ans
-            if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-                confirmed_instance_ids+=("$instance_id")
-                confirmed_instance_names+=("$instance_name")
-            else
-                echo "Deletion aborted for instance '$instance_name' (ID: $instance_id)."
-            fi
-        done
-
-        # Delete confirmed instances in bulk
-        if [ ${#confirmed_instance_ids[@]} -gt 0 ]; then
-            echo -e "${Red}Deleting: ${confirmed_instance_names[@]}...${Color_Off}"
-            aws ec2 terminate-instances --instance-ids "${confirmed_instance_ids[@]}" >/dev/null 2>&1
+    # Gather matching instance info into flat list
+    for region in $regions; do
+        if [ -s "$tempdir/$region.json" ]; then
+            while IFS=$'\t' read -r instance_id instance_name state az; do
+                for name in "${name_array[@]}"; do
+                    if [[ "$instance_name" == "$name" && "$state" != "terminated" ]]; then
+                        region_name="${az::-1}" # strip last letter of AZ to get region
+                        instance_info_list+=("$instance_id|$region_name|$instance_name")
+                    fi
+                done
+            done < <(jq -r '.[] | [.InstanceId, .Name, .State, .AZ] | @tsv' "$tempdir/$region.json")
         fi
+    done
+
+    rm -rf "$tempdir"
+
+    if [ ${#instance_info_list[@]} -eq 0 ]; then
+        echo "No matching instances found."
+        return 1
     fi
+
+    # Group and delete by region
+    for region in $regions; do
+        ids_to_delete=()
+        for info in "${instance_info_list[@]}"; do
+            instance_id=$(echo "$info" | cut -d'|' -f1)
+            info_region=$(echo "$info" | cut -d'|' -f2)
+            if [[ "$info_region" == "$region" ]]; then
+                ids_to_delete+=("$instance_id")
+            fi
+        done
+
+        if [ ${#ids_to_delete[@]} -gt 0 ]; then
+            if [[ "$force" == "true" ]]; then
+                echo -e "${Red}Deleting in $region: ${ids_to_delete[*]}${Color_Off}"
+                aws ec2 terminate-instances --instance-ids "${ids_to_delete[@]}" --region "$region" >/dev/null 2>&1
+            else
+                for id in "${ids_to_delete[@]}"; do
+                    echo -e -n "Delete instance $id in $region? (y/N): "
+                    read ans
+                    if [[ "$ans" == "y" || "$ans" == "Y" ]]; then
+                        echo -e "${Red}Deleting $id...${Color_Off}"
+                        aws ec2 terminate-instances --instance-ids "$id" --region "$region" >/dev/null 2>&1
+                    else
+                        echo "Aborted $id."
+                    fi
+                done
+            fi
+        fi
+    done
 }
 
 ###################################################################
@@ -469,7 +662,14 @@ create_instances() {
     region="$3"
     user_data="$4"
     timeout="$5"
-    shift 5
+    disk="$6"
+
+    # Default disk size to 20 if not provided
+    if [[ -z "$disk" || "$disk" == "null" ]]; then
+        disk="20"
+    fi
+
+    shift 6
     names=("$@")  # Remaining arguments are instance names
 
     security_group_name="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_name')"
@@ -485,6 +685,8 @@ create_instances() {
         return 1
     fi
 
+    disk_option="--block-device-mappings DeviceName=/dev/xvda,Ebs={VolumeSize=$disk,VolumeType=gp2,DeleteOnTermination=true}"
+
     count="${#names[@]}"
 
     # Create instances in one API call and capture output
@@ -495,6 +697,7 @@ create_instances() {
         --region "$region" \
         $security_group_option \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" \
+        $disk_option \
         --user-data "$user_data")
 
     instance_ids=($(echo "$instance_data" | jq -r '.Instances[].InstanceId'))
