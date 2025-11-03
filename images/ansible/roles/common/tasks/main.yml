@@ -1,0 +1,200 @@
+---
+- name: Wait for cloud-init
+  command: /usr/bin/cloud-init status --wait
+  changed_when: false
+
+- name: Create swap
+  include_tasks: swap.yml
+  when: ansible_swaptotal_mb == 0
+
+- name: Update & upgrade
+  apt:
+    update_cache: yes
+    upgrade: dist
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Install required packages
+  apt:
+    name:
+      - fail2ban
+      - ufw
+      - net-tools
+      - zsh
+      - zsh-syntax-highlighting
+      - zsh-autosuggestions
+      - jq
+      - build-essential
+      - python3-pip
+      - unzip
+      - git
+      - p7zip
+      - libpcap-dev
+      - rubygems
+      - ruby-dev
+      - grc
+      - nmap
+    state: present
+    install_recommends: no
+
+- name: Allow SSH and custom port in UFW
+  ufw:
+    rule: allow
+    port: "{{ item }}"
+  loop:
+    - '22'
+    - '2266'
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+    policy: deny
+
+- name: Create op user
+  user:
+    name: op
+    groups: sudo
+    shell: /usr/bin/zsh
+    create_home: yes
+    append: yes
+
+- name: Create op directories
+  file:
+    path: "/home/op/{{ item }}"
+    state: directory
+    owner: op
+    group: users
+    mode: '0755'
+  loop:
+    - .ssh
+    - c2
+    - recon
+    - lists
+    - go
+    - bin
+    - .config
+    - .cache
+    - work
+    - .config/amass
+
+- name: Remove default MOTD files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ q('fileglob', '/etc/update-motd.d/*') }}"
+
+- name: Install Oh My Zsh (non-interactively)
+  shell: >
+    sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" --unattended
+  become: yes
+  become_user: op
+  args:
+    creates: /home/op/.oh-my-zsh
+
+- name: Create sudo_as_admin_successful
+  file:
+    path: /home/op/.sudo_as_admin_successful
+    state: touch
+    owner: op
+    group: users
+
+- name: Create legal MOTD cache
+  file:
+    path: /home/op/.cache/motd.legal-displayed
+    state: touch
+    owner: op
+    group: users
+
+- name: Set passwords
+  user:
+    name: "{{ item.name }}"
+    password: "{{ op_random_password | password_hash('sha512') }}"
+  loop:
+    - { name: 'op' }
+    - { name: 'ubuntu' }
+    - { name: 'root' }
+
+- name: Copy config files from tmp (matching original Packer)
+  copy:
+    src: "/tmp/configs/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
+    mode: "{{ item.mode | default('0644') }}"
+    backup: yes
+    remote_src: true
+  loop:
+    - { src: 'sudoers', dest: '/etc/sudoers', owner: 'root', group: 'root', mode: '0440' }
+    - { src: 'bashrc', dest: '/home/op/.bashrc', owner: 'op', group: 'users', mode: '0644' }
+    - { src: 'zshrc', dest: '/home/op/.zshrc', owner: 'op', group: 'users', mode: '0644' }
+    - { src: 'sshd_config', dest: '/etc/ssh/sshd_config', owner: 'root', group: 'root', mode: '0600' }
+    - { src: '00-header', dest: '/etc/update-motd.d/00-header', owner: 'root', group: 'root', mode: '0755' }
+    - { src: 'authorized_keys', dest: '/home/op/.ssh/authorized_keys', owner: 'op', group: 'users', mode: '0600' }
+    - { src: 'tmux-splash.sh', dest: '/home/op/bin/tmux-splash.sh', owner: 'op', group: 'users', mode: '0755' }
+
+- name: Set op user file ownership
+  file:
+    path: /home/op
+    owner: op
+    group: users
+    recurse: yes
+
+- name: Install Golang
+  unarchive:
+    src: "https://golang.org/dl/go{{ golang_version }}.linux-amd64.tar.gz"
+    dest: /usr/local
+    remote_src: yes
+    creates: /usr/local/go
+    mode: '0755'
+
+- name: Install Docker
+  shell: curl -fsSL https://get.docker.com | sh
+  args:
+    creates: /usr/bin/docker
+
+- name: Add op user to docker group
+  user:
+    name: op
+    groups: docker
+    append: yes
+
+- name: Install uv system-wide using installer script
+  shell: |
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR="/usr/local/bin" sh
+  args:
+    creates: "/usr/local/bin/uv"
+
+- name: Install Interlace using uv tool for user op
+  become_user: op
+  shell: uv tool install git+https://github.com/codingo/Interlace.git
+  register: uv_install_result
+  changed_when: "'already installed' not in uv_install_result.stderr"
+  failed_when: uv_install_result.rc != 0 and 'already installed' not in uv_install_result.stderr
+
+- name: Optimize SSH config
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^{{ item.key }} "
+    line: "{{ item.key }} {{ item.value }}"
+    validate: /usr/sbin/sshd -t -f %s
+  loop:
+    - { key: 'ClientAliveInterval', value: '60' }
+    - { key: 'ClientAliveCountMax', value: '60' }
+    - { key: 'MaxSessions', value: '100' }
+  notify: restart ssh
+
+- name: Tune sysctl for high concurrency
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: no
+  loop:
+    - { name: 'net.nf_conntrack_max', value: '1048576' }
+    - { name: 'net.core.somaxconn', value: '1048576' }
+    - { name: 'net.ipv4.ip_local_port_range', value: '1024 65535' }
+
+- name: Clean apt
+  apt:
+    autoclean: yes
+    autoremove: yes

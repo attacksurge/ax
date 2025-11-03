@@ -1,0 +1,3 @@
+---
+op_random_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+golang_version: "1.22.5"  # Override via Packer var
