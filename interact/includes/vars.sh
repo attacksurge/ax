@@ -91,3 +91,53 @@ query_instances_cache() {
     echo -n "${selected}" | xargs
 }
 
+# shared function to log fleet spin up stats
+# stats are saved to ~/.axiom/stats.log
+axiom_stats_log_instance() {
+    # args: name ip region size image_id instance_id
+    local name="$1"
+    local ip="$2"
+    local region="$3"
+    local size="$4"
+    local image_id="$5"
+    local instance_id="$6"
+
+    local log_file="${AXIOM_STATS_LOG:-$HOME/.axiom/stats.log}"
+    local lock_dir="${log_file}.lockdir"
+
+    local provider="${AXIOM_PROVIDER:-}"
+    local image_name="${AXIOM_IMAGE_NAME:-}"
+    local fleet="${AXIOM_FLEET_PREFIX:-}"
+    local deploy="${AXIOM_DEPLOY:-false}"
+
+    local now
+    now="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+    json_escape() {
+        echo -n "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+    }
+
+    mkdir -p "$(dirname "$log_file")" 2>/dev/null
+
+    while ! mkdir "$lock_dir" 2>/dev/null; do
+        sleep 0.02
+    done
+
+    {
+        printf '{'
+        printf '"fleet":{'
+        printf '"name":"%s",' "$(json_escape "$name")"
+        printf '"ip":"%s",' "$(json_escape "$ip")"
+        printf '"provider":"%s",' "$(json_escape "$provider")"
+        printf '"region":"%s",' "$(json_escape "$region")"
+        printf '"size":"%s",' "$(json_escape "$size")"
+        printf '"image":"%s",' "$(json_escape "$image_name")"
+        printf '"image_id":"%s",' "$(json_escape "$image_id")"
+        printf '"instance_id":"%s",' "$(json_escape "$instance_id")"
+        printf '"prefix":"%s",' "$(json_escape "$fleet")"
+        printf '"time":"%s"' "$(json_escape "$now")"
+        printf '}}\n'
+    } >> "$log_file"
+
+    rmdir "$lock_dir" 2>/dev/null
+}

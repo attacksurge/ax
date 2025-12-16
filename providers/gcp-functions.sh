@@ -506,6 +506,7 @@ create_instances() {
                 if ! grep -q "^$name\$" "$processed_file"; then
                     echo "$name" >> "$processed_file"
                     >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${Color_Off}'!"
+                    axiom_stats_log_instance "$name" "${ip:-N/A}" "$zone" "$machine_type" "$image_id" ""
                 fi
             else
                 all_ready=false

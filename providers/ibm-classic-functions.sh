@@ -468,6 +468,7 @@ create_instances() {
                     ibmcloud sl vs edit "$id" --hostname "$new_name" 2>&1 >>/dev/null
                     echo "$new_name" >> "$processed_file"
                     >&2 echo -e "${BWhite}Initialized instance '${BGreen}$new_name${Color_Off}${BWhite}' at IP '${BGreen}${ip}${BWhite}'!"
+                    axiom_stats_log_instance "$new_name" "${ip:-N/A}" "$region" "$size" "$image_id" "$id"
                 fi
             else
                 # If any instance is not ACTIVE, we must keep waitingreson
