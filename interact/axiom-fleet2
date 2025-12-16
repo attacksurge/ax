@@ -38,15 +38,21 @@ legacy_spinup=false
 #
 timer(){
 (
-    secs=$timeout  # Dynamic timeout based on the number of instances
+    secs=$timeout
     while [ $secs -gt 0 ]; do
         echo -ne "${BWhite}>> T-Minus $secs to full initialization...${Color_Off}\r"
         sleep 1
         : $((secs--))
     done
+
     if [[ "$legacy_spinup" == "false" ]]; then
         echo -e "\n${BRed}Timeout reached. Some instances may not be ready.${Color_Off}"
-        kill "$create_instances_pids" 2>/dev/null  # Kill the ongoing processes if timeout reached
+
+        if [[ -f "$pid_file" ]]; then
+            while IFS= read -r pid; do
+                [[ -n "$pid" ]] && kill "$pid" 2>/dev/null
+            done < "$pid_file"
+        fi
     fi
 ) &
 }
@@ -185,6 +191,15 @@ else
 fi
 
 ###########################################################################################################
+# Export logging context so background create_instances subshells write fleet stats to ~/.axiom/stats.log
+#
+export AXIOM_STATS_LOG="$AXIOM_PATH/stats.log"
+export AXIOM_PROVIDER="$provider"
+export AXIOM_IMAGE_NAME="$image"
+export AXIOM_FLEET_PREFIX="$gen_name"
+export AXIOM_DEPLOY="false"
+
+###########################################################################################################
 # Check if ssh key is specified in axiom.json
 #
 if [ "$sshkey" == "" ] || [ "$sshkey" == "null" ]; then
@@ -243,6 +258,11 @@ cleanup() {
         wait "$timer_pid" 2>/dev/null
     fi
 
+    # Clean-up pid_file
+    if [[ -n "$pid_file" ]]; then
+        rm -f "$pid_file" >/dev/null 2>&1
+    fi
+
     exit 1
 }
 
@@ -273,6 +293,7 @@ num_names=${#names[@]}
 
 # Create temporary files to store instance names per region
 temp_dir=$(mktemp -d)
+pid_file=$(mktemp)
 for region in "${formatted_regions[@]}"; do
     touch "$temp_dir/$region"
 done
@@ -322,6 +343,7 @@ for region in "${formatted_regions[@]}"; do
             # Pass the arguments and names to create_instances function to create instances in parallel
             create_instances "$image_id" "$default_size" "$region" "$user_data" "$timeout" "$disk" "${region_names[@]}" &
             create_instances_pids+=($!)  # Store the PID of this process
+            echo "$!" >> "$pid_file"
         else
             # Use legacy spinup, create_instance function, to create one instance at a time (--legacy)
             for name in "${region_names[@]}"; do
@@ -341,7 +363,7 @@ if [[ "$legacy_spinup" == "true" ]]; then
 fi
 
 # Clean up temp directory
-rm -rf "$temp_dir"
+rm -rf "$temp_dir" >/dev/null 2>&1
 
 # Wait for all create_instances processes to complete simultaneously
 wait "${create_instances_pids[@]}"
@@ -349,6 +371,9 @@ wait "${create_instances_pids[@]}"
 # Kill the timer when `create_instances` finishes
 kill "$timer_pid" >/dev/null 2>&1
 wait "$timer_pid" 2>/dev/null || true  # Ignore errors from already terminated timer
+
+# Clean up pid_file
+rm -f "$pid_file" >/dev/null 2>&1
 
 # Select the instances
 "$AXIOM_PATH"/interact/axiom-select "${names[@]}"

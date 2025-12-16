@@ -770,6 +770,8 @@ create_instances() {
                 if ! grep -q "^$name\$" "$processed_file"; then
                     echo "$name" >> "$processed_file"
                     >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at IP '${BGreen}${ip:-"N/A"}${BWhite}'!"
+                    axiom_stats_log_instance "$name" "${ip:-N/A}" "$region" "$size" "$image_id" "$id"
+
                 fi
             else
                 # If any instance is not in "running", we must keep waiting

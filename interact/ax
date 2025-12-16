@@ -22,7 +22,7 @@ esac
 # Help Menu
 #
 help() {
-    echo -e "${BGreen}Ax Framework - Distributed Cloud Scanning Platform${Color_Off}"
+    echo -e "${BGreen}Ax - Distributed Cloud Scanning Framework${Color_Off}"
     echo -e "${BGreen}Usage:${Color_Off} ax <command> [options]"
     echo -e "Use 'ax <command> --help' to get more details on a specific command."
     echo

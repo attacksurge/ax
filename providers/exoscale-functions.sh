@@ -679,6 +679,7 @@ create_instances() {
                     if [ "$status" = "running" ] && [ -n "$ip" ] && [ "$ip" != "null" ]; then
                         mark_notified "$name"
                         >&2 echo -e "${BWhite}Initialized instance '${BGreen}$name${Color_Off}${BWhite}' at '${BGreen}$ip${BWhite}'!${Color_Off}"
+                        axiom_stats_log_instance "$name" "${ip:-N/A}" "$region" "$size" "$image_id" ""
                     fi
                 fi
             done
