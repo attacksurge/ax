@@ -77,21 +77,47 @@ instance_list() {
 # used by axiom-ls
 instance_pretty() {
   data=$(instances)
-  #number of linodes
-  linodes=$(echo $data|jq -r '.[]|.id'|wc -l )
-  #default size from config file
-  type="$(jq -r .default_size "$AXIOM_PATH/axiom.json")"
-  #monthly price of linode type 
-  price=$(linode-cli linodes type-view $type --json|jq -r '.[].price.monthly')
-  #  totalPrice=$(( "$price * $linodes" | bc))
-  totalPrice=$(awk "BEGIN {print $price * $linodes}")
 
+  # number of linodes
+  linodes=$(echo "$data" | jq -r '.[] | .id' | wc -l)
+
+  # fetch all types once (optimized)
+  declare -A type_price
+  while IFS="|" read -r id monthly; do
+    type_price["$id"]="$monthly"
+  done < <(linode-cli linodes types --json | jq -r '.[] | "\(.id)|\(.price.monthly)"')
+
+  # header line as CSV
   header="Instance,Primary Ip,Backend Ip,Region,Size,Status,\$/M"
-  totals="_,_,_,Instances,$linodes,Total,\$$totalPrice"
-  fields=".[] | [.label,.ipv4[0],.ipv4[1],.region,.type,.status, \"$price\"]| @csv"
-  #printing part
-  #sort -k1 sorts all data by label/instance/linode name
-  (echo "$header" && echo $data|(jq -r "$fields" |sort -k1) && echo "$totals") | sed 's/"//g' | column -t -s, 
+
+  # totals variable placeholder
+  totalPrice=0
+  output=""
+
+  # loop over each instance without subshell
+  while read -r inst; do
+    label=$(echo "$inst" | jq -r '.label')
+    ipv4_0=$(echo "$inst" | jq -r '.ipv4[0]')
+    ipv4_1=$(echo "$inst" | jq -r '.ipv4[1]')
+    region=$(echo "$inst" | jq -r '.region')
+    type=$(echo "$inst" | jq -r '.type')
+    status=$(echo "$inst" | jq -r '.status')
+
+    # lookup price from table
+    price="${type_price[$type]:-0}"
+    price=$(printf "%.2f" "$price")
+
+    # accumulate total
+    totalPrice=$(echo "$totalPrice + $price" | bc)
+
+    # append CSV line
+    output+="$label,$ipv4_0,$ipv4_1,$region,$type,$status,$price"$'\n'
+  done < <(echo "$data" | jq -c '.[]')
+
+  # print everything using column with comma separator
+  (echo "$header" && echo "$output" | sort -t, -k1 && \
+   echo "_,_,_,Instances,$linodes,Total,$(printf "%.2f" "$totalPrice")") \
+   | column -t -s,
 }
 
 ###################################################################
