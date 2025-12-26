@@ -247,7 +247,7 @@ get_image_id() {
 # used for axiom-images
 #
 get_snapshots() {
-    linode-cli images list --is_public false
+    linode-cli images list --is_public false | grep --color=never -E "capabilities|distributed-sites"
 }
 
 # Delete a snapshot by its name
