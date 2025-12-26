@@ -32,7 +32,7 @@ export GolangVersion='1.23.0'
 # Recommended Cloud provider CLI versions
 # Only updates if the installed version is lower than recommended version
 export DoctlVersion='1.112.0'
-export LinodeCliVersion='5.56.3'
+export LinodeCliVersion='5.65.0'
 export IBMCloudCliVersion='2.27.0'
 export HetznerCliVersion='1.47.0'
 export AzureCliVersion="2.64.0"

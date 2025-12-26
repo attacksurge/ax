@@ -81,11 +81,8 @@ instance_pretty() {
   # number of linodes
   linodes=$(echo "$data" | jq -r '.[] | .id' | wc -l)
 
-  # fetch all types once (optimized)
-  declare -A type_price
-  while IFS="|" read -r id monthly; do
-    type_price["$id"]="$monthly"
-  done < <(linode-cli linodes types --json | jq -r '.[] | "\(.id)|\(.price.monthly)"')
+  # fetch all types once
+  types_table=$(linode-cli linodes types --json | jq -r '.[] | "\(.id)|\(.price.monthly)"')
 
   # header line as CSV
   header="Instance,Primary Ip,Backend Ip,Region,Size,Status,\$/M"
@@ -104,7 +101,11 @@ instance_pretty() {
     status=$(echo "$inst" | jq -r '.status')
 
     # lookup price from table
-    price="${type_price[$type]:-0}"
+    price=$(printf '%s\n' "$types_table" | awk -F'|' -v t="$type" '$1 == t {print $2; exit}')
+
+    # default to 0 if not found
+    [ -z "$price" ] && price=0
+
     price=$(printf "%.2f" "$price")
 
     # accumulate total
@@ -273,7 +274,7 @@ get_image_id() {
 # used for axiom-images
 #
 get_snapshots() {
-    linode-cli images list --is_public false
+       linode-cli --no-truncation --format label,id,description,total_size,status images list --is_public false
 }
 
 # Delete a snapshot by its name
