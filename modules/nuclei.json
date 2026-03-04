@@ -5,7 +5,7 @@
     "folder": "/home/op/nuclei-templates"
   },
   {
-    "command": "/home/op/go/bin/nuclei -update -silent ; cat input | /home/op/go/bin/nuclei -jsonl -o output",
+    "command": "/home/op/go/bin/nuclei -update -silent ; cat input | /home/op/go/bin/nuclei -t _folder_ -jsonl -o output",
     "ext": "jsonl",
     "folder": "/home/op/nuclei-templates"
   }
