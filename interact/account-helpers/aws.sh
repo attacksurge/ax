@@ -229,7 +229,7 @@ while true; do
         echo -e "${BGreen}Creating or reusing the security group '$SECURITY_GROUP' in ALL AWS regions...${Color_Off}"
         break
     elif [[ "$REGION_SELECTION" == "n" ]] || [[ "$REGION_SELECTION" == "no" ]]; then
-        all_regions=$(aws ec2 describe-regions --region-names us-east-1 --query "Regions[].RegionName" --output text)
+        all_regions=$(aws ec2 describe-regions --region-names "$region" --query "Regions[].RegionName" --output text)
         echo -e "${BGreen}Creating or reusing the security group '$SECURITY_GROUP' in only the AWS $region region...${Color_Off}"
         break
     else
