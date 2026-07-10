@@ -398,15 +398,19 @@ if [[ "$provider" == "aws" ]]; then
     aws_access_key="$(jq -r '.aws_access_key' "$AXIOM_PATH"/axiom.json)"
     aws_secret_access_key="$(jq -r '.aws_secret_access_key' "$AXIOM_PATH"/axiom.json)"
     aws_region="$(jq -r '.region' "$AXIOM_PATH"/axiom.json)"
+    aws_profile="$(jq -r '.aws_profile' "$AXIOM_PATH"/axiom.json)"
 
-    if [[ -n "$aws_access_key" && -n "$aws_secret_access_key" ]]; then
-        echo -e "${BGreen}Configuring AWS CLI with credentials from axiom.json...${Color_Off}"
-        aws configure set aws_access_key_id "$aws_access_key"
-        aws configure set aws_secret_access_key "$aws_secret_access_key"
-        aws configure set region "$aws_region"
+    if [[ "$aws_access_key" != "null" && "$aws_secret_access_key" != "null" ]]; then
+       echo -e "${BGreen}Configuring AWS CLI with credentials from axiom.json...${Color_Off}"
+       aws configure set aws_access_key_id "$aws_access_key"
+       aws configure set aws_secret_access_key "$aws_secret_access_key"
+       aws configure set region "$aws_region"
+    elif [[ "$aws_profile" != "null" ]]; then
+       echo -e "${BGreen}Configuring AWS CLI to use profile from axiom.json...${Color_Off}"
+       export AWS_PROFILE="$aws_profile"
     else
-        echo -e "${BRed}No AWS credentials found in axiom.json. Please set them manually.${Color_Off}"
-        bootstrap
+       echo -e "${BRed}No AWS credentials found in axiom.json. Please set them manually.${Color_Off}"
+       bootstrap
     fi
 
     # Check if AWS CLI is authenticated

@@ -2,6 +2,12 @@
 
 AXIOM_PATH="$HOME/.axiom"
 
+# Set AWS_PROFILE if configured
+aws_profile="$(jq -r '.aws_profile' "$AXIOM_PATH"/axiom.json)"
+if [[ "$aws_profile" != "null" ]]; then
+	export AWS_PROFILE="$aws_profile"
+fi
+
 ###################################################################
 #  Create Instance is likely the most important provider function :)
 #  needed for init and fleet
@@ -23,16 +29,25 @@ create_instance() {
 
     security_group_name="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_name')"
     security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
+    subnet_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.aws_subnet_id')"
+	associate_public_ip_address="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.associate_public_ip_address')"
 
     # Determine whether to use security_group_name or security_group_id
-    if [[ -n "$security_group_name" && "$security_group_name" != "null" ]]; then
-        security_group_option="--security-groups $security_group_name"
-    elif [[ -n "$security_group_id" && "$security_group_id" != "null" ]]; then
+    if [[ -n "$security_group_id" && "$security_group_id" != "null" ]]; then
         security_group_option="--security-group-ids $security_group_id"
+    elif [[ -n "$security_group_name" && "$security_group_name" != "null" ]]; then
+        security_group_option="--security-groups $security_group_name"
     else
         echo "Error: Both security_group_name and security_group_id are missing or invalid in axiom.json."
         return 1
     fi
+
+	# Determine whether to associate a public ip address
+	if [[ -n "$associate_public_ip_address" && "$associate_public_ip_address" == "true" ]]; then
+        public_ip_option="--associate-public-ip-address"
+	else
+		public_ip_option="--no-associate-public-ip-address"
+	fi
 
     # Launch the instance using the determined security group option
     aws ec2 run-instances \
@@ -41,6 +56,8 @@ create_instance() {
         --instance-type "$size" \
         --region "$region" \
         $security_group_option \
+		$public_ip_option \
+        --subnet-id "$subnet_id" \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" \
         --user-data "$user_data" \
         $disk_option 2>&1 >> /dev/null
@@ -688,16 +705,25 @@ create_instances() {
 
     security_group_name="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_name')"
     security_group_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.security_group_id')"
+    subnet_id="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.aws_subnet_id')"
+	associate_public_ip_address="$(cat "$AXIOM_PATH/axiom.json" | jq -r '.associate_public_ip_address')"
 
     # Determine whether to use security_group_name or security_group_id
-    if [[ -n "$security_group_name" && "$security_group_name" != "null" ]]; then
-        security_group_option="--security-groups $security_group_name"
-    elif [[ -n "$security_group_id" && "$security_group_id" != "null" ]]; then
+    if [[ -n "$security_group_id" && "$security_group_id" != "null" ]]; then
         security_group_option="--security-group-ids $security_group_id"
+    elif [[ -n "$security_group_name" && "$security_group_name" != "null" ]]; then
+        security_group_option="--security-groups $security_group_name"
     else
         echo "Error: Both security_group_name and security_group_id are missing or invalid in axiom.json."
         return 1
     fi
+
+	# Determine whether to associate a public ip address
+	if [[ -n "$associate_public_ip_address" && "$associate_public_ip_address" == "true" ]]; then
+        public_ip_option="--associate-public-ip-address"
+	else
+		public_ip_option="--no-associate-public-ip-address"
+	fi
 
     disk_option="--block-device-mappings DeviceName=/dev/xvda,Ebs={VolumeSize=$disk,VolumeType=gp2,DeleteOnTermination=true}"
 
@@ -710,6 +736,8 @@ create_instances() {
         --instance-type "$size" \
         --region "$region" \
         $security_group_option \
+		$public_ip_option \
+        --subnet-id "$subnet_id" \
         --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name}]" \
         $disk_option \
         --user-data "$user_data")

@@ -84,25 +84,88 @@ fi
 
 function awssetup(){
 
-echo -e -n "${Green}Please enter your AWS Access Key ID (required): \n>> ${Color_Off}"
-read ACCESS_KEY
-while [[ "$ACCESS_KEY" == "" ]]; do
-	echo -e "${BRed}Please provide an AWS Access KEY ID, your entry contained no input.${Color_Off}"
-	echo -e -n "${Green}Please enter your token (required): \n>> ${Color_Off}"
-	read ACCESS_KEY
+while true; do
+    echo -e -n "${Green}Do you plan to authenticate using and AWS Access and Secret Keys? y/n: \n>> ${Color_Off}"
+    read ACCESS_KEY_AUTH
+
+    if [[ "$ACCESS_KEY_AUTH" == "y" ]] || [[ "$ACCESS_KEY_AUTH" == "yes" ]]; then
+        
+        echo -e -n "${Green}Please enter your AWS Access Key ID (required): \n>> ${Color_Off}"
+        read ACCESS_KEY
+        while [[ "$ACCESS_KEY" == "" ]]; do
+          echo -e "${BRed}Please provide an AWS Access KEY ID, your entry contained no input.${Color_Off}"
+          echo -e -n "${Green}Please enter your token (required): \n>> ${Color_Off}"
+          read ACCESS_KEY
+        done
+
+        echo -e -n "${Green}Please enter your AWS Secret Access Key (required): \n>> ${Color_Off}"
+        read SECRET_KEY
+        while [[ "$SECRET_KEY" == "" ]]; do
+          echo -e "${BRed}Please provide an AWS Secret Access Key, your entry contained no input.${Color_Off}"
+          echo -e -n "${Green}Please enter your token (required): \n>> ${Color_Off}"
+          read SECRET_KEY
+        done
+
+        aws configure set aws_access_key_id "$ACCESS_KEY"
+        aws configure set aws_secret_access_key "$SECRET_KEY"
+        break
+
+    elif [[ "$ACCESS_KEY_AUTH" == "n" ]] || [[ "$ACCESS_KEY_AUTH" == "no" ]]; then
+        # Print available aws profiles
+        echo -e "${BGreen}Printing Available Profiles:${Color_Off}"
+        (aws configure list-profiles) | column -t
+
+        # Prompt user to choose a profile
+        echo -e -n "${Green}Please choose a profile.\n>> ${Color_Off}"
+        read PROFILE
+
+        # Export so subsequent commands can use the correct profile
+        export AWS_PROFILE=$PROFILE
+        break
+    else
+        echo -e "${BRed}Invalid response. Please enter 'y' for yes or 'n' for no.${Color_Off}"
+    fi
 done
 
-echo -e -n "${Green}Please enter your AWS Secret Access Key (required): \n>> ${Color_Off}"
-read SECRET_KEY
-while [[ "$SECRET_KEY" == "" ]]; do
-	echo -e "${BRed}Please provide an AWS Secret Access Key, your entry contained no input.${Color_Off}"
-	echo -e -n "${Green}Please enter your token (required): \n>> ${Color_Off}"
-	read SECRET_KEY
-done
-
-aws configure set aws_access_key_id "$ACCESS_KEY"
-aws configure set aws_secret_access_key "$SECRET_KEY"
 aws configure set output json
+
+# Find all available VPCs
+aws_vpcs="$(aws ec2 describe-vpcs)"
+
+# Check for Default VPC
+if [ "$(jq -rC '.Vpcs | any(.IsDefault == true)' <<< "$aws_vpcs")" == true ]; then
+  echo -e "${Green}It appears the default VPC is available. Automatically using to build Images. ${Color_Off}"
+  aws_vpc_id="$(jq -C '.Vpcs[] | select(.IsDefault == true).VpcId' <<< $aws_vpcs)"
+
+else
+  # Print available aws VPCs
+  echo -e "${BGreen}Printing Available VPCs:${Color_Off}"
+  (
+    jq -rC '.Vpcs | map({VpcId, "Name":(.Tags | if any(.Key == "Name") then (.[] | select(.Key == "Name").Value) else "null" end), OwnerId, IsDefault, State, CidrBlock}) | (.[0] | keys_unsorted), (.[] | [.[]]) | @tsv' <<< $aws_vpcs
+  ) | column -t
+        
+  # Prompt user to select a VPC
+  echo -e -n "${Green}Please choose a VpcId to deploy instances to.\n>> ${Color_Off}"
+  read aws_vpc_id
+fi
+
+# Find all available subnets within selected VPC
+aws_subnets="$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$aws_vpc_id")"
+
+# Check for Default Subnets
+if [ "$(jq -rC '.Subnets | any(.DefaultForAz == true)' <<< "$aws_subnets")" == true ]; then
+  echo "Found Default Subnet"
+else
+  # Print available aws Subnets
+  echo -e "${BGreen}Printing Available Subnets:${Color_Off}"
+  (
+    jq -rC '.Subnets | map({SubnetId,"Name":(.Tags | if any(.Key == "Name") then (.[] | select(.Key == "Name").Value | gsub(" ";"")) else "null" end), CidrBlock, OwnerId, State})| (.[0] | keys_unsorted), (.[] | [.[]]) | @tsv' <<< $aws_subnets
+  ) | column -t
+        
+  # Prompt user to select a Subnet
+  echo -e -n "${Green}Please choose a SubnetId to build instances within.\n>> ${Color_Off}"
+  read aws_subnet_id
+fi
 
 default_region="us-west-2"
 echo -e -n "${Green}Please enter your default region (you can always change this later with axiom-region select \$region): Default '$default_region', press enter \n>> ${Color_Off}"
@@ -126,7 +189,11 @@ if [[ "$disk_size" == "" ]]; then
   echo -e "${Blue}Selected default option '20'${Color_Off}"
 fi
 
-aws configure set default.region "$region"
+if [ -z "${PROFILE}" ]; then
+  aws configure set default.region "$region"
+else
+  aws configure set "$PROFILE.region" "$region"
+fi
 
 # Print available security groups
 echo -e "${BGreen}Printing Available Security Groups:${Color_Off}"
@@ -141,11 +208,6 @@ echo -e "${BGreen}Printing Available Security Groups:${Color_Off}"
 echo -e -n "${Green}Please enter a security group name above or press enter to create a new security group with a random name \n>> ${Color_Off}"
 read SECURITY_GROUP
 
-# Get all available AWS regions
-all_regions=$(aws ec2 describe-regions --query "Regions[].RegionName" --output text)
-
-echo -e "${BGreen}Creating or reusing the security group '$SECURITY_GROUP' in ALL AWS regions...${Color_Off}"
-
 # We will track the "last" group_id and group_owner_id found or created
 # so the script can still store them as before.
 last_group_id=""
@@ -157,6 +219,23 @@ if [[ "$SECURITY_GROUP" == "" ]]; then
   SECURITY_GROUP=$axiom_sg_random
   echo -e "${BGreen}No Security Group provided, will create a new one: '$SECURITY_GROUP' in each region.${Color_Off}"
 fi
+
+while true; do
+    echo -e -n "${Green}Create or reuse the security group '$SECURITY_GROUP' in ALL AWS regions? y/n: \n>> ${Color_Off}"
+    read REGION_SELECTION
+
+    if [[ "$REGION_SELECTION" == "y" ]] || [[ "$REGION_SELECTION" == "yes" ]]; then
+        all_regions=$(aws ec2 describe-regions --query "Regions[].RegionName" --output text)
+        echo -e "${BGreen}Creating or reusing the security group '$SECURITY_GROUP' in ALL AWS regions...${Color_Off}"
+        break
+    elif [[ "$REGION_SELECTION" == "n" ]] || [[ "$REGION_SELECTION" == "no" ]]; then
+        all_regions=$(aws ec2 describe-regions --region-names "$region" --query "Regions[].RegionName" --output text)
+        echo -e "${BGreen}Creating or reusing the security group '$SECURITY_GROUP' in only the AWS $region region...${Color_Off}"
+        break
+    else
+        echo -e "${BRed}Invalid response. Please enter 'y' for yes or 'n' for no.${Color_Off}"
+    fi
+done
 
 first_group_id=""
 first_owner_id=""
@@ -241,10 +320,15 @@ else
   exit 1
 fi
 
-data="$(echo "{\"aws_access_key\":\"$ACCESS_KEY\",\"aws_secret_access_key\":\"$SECRET_KEY\",\"group_owner_id\":\"$group_owner_id\",\"security_group_name\":\"$SECURITY_GROUP\",\"security_group_id\":\"$last_group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\",\"default_disk_size\":\"$disk_size\"}")"
+if [ -z "${PROFILE}" ]; then
+  data="{\"aws_access_key\":\"$ACCESS_KEY\",\"aws_secret_access_key\":\"$SECRET_KEY\",\"aws_vpc_id\":\"$aws_vpc_id\",\"aws_subnet_id\":\"$aws_subnet_id\",\"group_owner_id\":\"$group_owner_id\",\"security_group_name\":\"$SECURITY_GROUP\",\"security_group_id\":\"$last_group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\",\"default_disk_size\":\"$disk_size\"}"
+else
+  data="{\"aws_profile\":\"$PROFILE\",\"aws_vpc_id\":\"$aws_vpc_id\",\"aws_subnet_id\":\"$aws_subnet_id\",\"group_owner_id\":\"$group_owner_id\",\"security_group_name\":\"$SECURITY_GROUP\",\"security_group_id\":\"$last_group_id\",\"region\":\"$region\",\"provider\":\"aws\",\"default_size\":\"$size\",\"default_disk_size\":\"$disk_size\"}"
+fi
+
 
 echo -e "${BGreen}Profile settings below: ${Color_Off}"
-echo "$data" | jq '.aws_secret_access_key = "*************************************"'
+echo "$data" | jq 'if .aws_secret_access_key? then .aws_secret_access_key="*************************************" else . end'
 echo -e "${BWhite}Press enter if you want to save these to a new profile, type 'r' if you wish to start again.${Color_Off}"
 read ans
 
@@ -269,4 +353,3 @@ $AXIOM_PATH/interact/axiom-account "$title"
 }
 
 awssetup
-
