@@ -129,7 +129,13 @@ function bash_shell(){
 
 function zsh_shell(){
     timestamp=$(date +%Y-%m-%d_%H-%M-%S)
-    sudo apt install zsh -y
+    if [[ "$OS" == "Arch" ]] || [[ "$OS" == "ManjaroLinux" ]]; then
+        sudo pacman -S zsh --noconfirm
+    elif [[ "$OS" == "Fedora" ]]; then
+        sudo dnf install zsh -y
+    else
+        sudo apt install zsh -y
+    fi
     echo -e "${BGreen}Backing up $(echo "$HOME"/.zshrc) to $(echo "$HOME"/.zshrc-$timestamp) just in case.${Color_Off}"
     cp "$HOME"/.zshrc "$HOME"/.zshrc-$timestamp >> /dev/null 2>&1
 
@@ -187,7 +193,13 @@ function omz_shell(){
     echo -e "${BGreen}Backing up $(echo "$HOME"/.oh-my-zsh/) to $(echo "$HOME"/.oh-my-zsh-$timestamp) just in case.${Color_Off}"
     mv "$HOME"/.oh-my-zsh "$HOME"/.oh-my-zsh-$timestamp >> /dev/null 2>&1
 
-    sudo apt install zsh zsh-syntax-highlighting zsh-autosuggestions -y
+    if [[ "$OS" == "Arch" ]] || [[ "$OS" == "ManjaroLinux" ]]; then
+        sudo pacman -S zsh zsh-syntax-highlighting zsh-autosuggestions --noconfirm
+    elif [[ "$OS" == "Fedora" ]]; then
+        sudo dnf install zsh zsh-syntax-highlighting zsh-autosuggestions -y
+    else
+        sudo apt install zsh zsh-syntax-highlighting zsh-autosuggestions -y
+    fi
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
     if [[ "$unattended" == "true" ]]; then
         echo -e "${BGreen}Installing Golang ${GolangVersion}${Color_Off}"
@@ -378,12 +390,41 @@ if [[ $BASEOS == "Linux" ]]; then
         OS="UbuntuWSL"
     else
         OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-        if ! command -v lsb_release &> /dev/null; then
-            echo -e "${Yellow}WARNING: lsb_release not found. Unless using Ubuntu latest, this install might not work${Color_Off}"
-            echo "lsb_release could not be found, unable to determine your distribution"
-            OS="unknown-Linux"
-            BASEOS="Linux"
-        fi
+        # Check if lsb_release returned a known distro
+        case "$OS" in
+            Arch|ManjaroLinux|Ubuntu|Debian|Kali|Linuxmint|Parrot|Fedora) ;;
+            *)
+                # lsb_release unavailable or returned unknown distro, try /etc/os-release
+                if [[ -f /etc/os-release ]]; then
+                    OS=$(. /etc/os-release && echo "$ID")
+                    case "$OS" in
+                        arch)       OS="Arch" ;;
+                        manjaro)    OS="ManjaroLinux" ;;
+                        ubuntu)     OS="Ubuntu" ;;
+                        debian)     OS="Debian" ;;
+                        kali)       OS="Kali" ;;
+                        linuxmint)  OS="Linuxmint" ;;
+                        parrot)     OS="Parrot" ;;
+                        fedora)     OS="Fedora" ;;
+                        *)
+                            # Fallback to ID_LIKE for derivatives (CachyOS, EndeavourOS, Garuda, etc.)
+                            _id_like=$(. /etc/os-release && echo "$ID_LIKE")
+                            case "$_id_like" in
+                                arch|arch*) OS="Arch" ;;
+                                debian*)    OS="Debian" ;;
+                                ubuntu*)    OS="Ubuntu" ;;
+                                fedora*)    OS="Fedora" ;;
+                                *)          OS="unknown-Linux" ; BASEOS="Linux" ;;
+                            esac
+                            ;;
+                    esac
+                else
+                    echo -e "${Yellow}WARNING: Unable to determine your distribution${Color_Off}"
+                    OS="unknown-Linux"
+                    BASEOS="Linux"
+                fi
+                ;;
+        esac
     fi
     if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
         echo -e "${BGreen}Congrats, you run arch..."

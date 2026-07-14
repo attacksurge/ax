@@ -45,15 +45,7 @@ if [[ "$(printf '%s\n' "$installed_version" "$DoctlVersion" | sort -V | head -n 
         packer plugins install github.com/digitalocean/digitalocean
 
     elif [[ $BASEOS == "Linux" ]]; then
-        if uname -a | grep -qi "Microsoft"; then
-            OS="UbuntuWSL"
-        else
-            OS=$(lsb_release -i | awk '{ print $3 }')
-         if ! command -v lsb_release &> /dev/null; then
-             OS="unknown-Linux"
-             BASEOS="Linux"
-         fi
-    fi
+        OS=$(detect_os)
     if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
             sudo pacman -Syu doctl --noconfirm
         elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then

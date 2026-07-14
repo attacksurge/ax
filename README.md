@@ -139,7 +139,7 @@ If you have any problems with this installer, or if using an unsupported OS plea
 | Debian     |    Yes    | Yes           | Debian 12     |
 | Windows    |    Yes    | Yes           | WSL w/ Ubuntu |
 | MacOS      |    Yes    | Yes           | macOS 14      |
-| Arch Linux |    Yes    | No            | Yes           |
+| Arch Linux |    Yes    | Yes           | Yes           |
 
 <br>
 

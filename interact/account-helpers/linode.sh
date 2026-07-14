@@ -69,11 +69,7 @@ if [[ "$acc" == "n" ]]; then
     if [ $BASEOS == "Mac" ]; then
     open "https://www.linode.com/lp/refer/?r=71f79f7e02534d6f673cbc8a17581064e12ac27d"
     elif [ $BASEOS == "Linux" ]; then
-           OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-   if ! command -v lsb_release &> /dev/null; then
-            OS="unknown-Linux"
-            BASEOS="Linux"
-   fi
+        OS=$(detect_os)
        if [ $OS == "Arch" ] || [ $OS == "ManjaroLinux" ]; then
           sudo pacman -Syu xdg-utils --noconfirm
        else

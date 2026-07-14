@@ -62,11 +62,16 @@ if [[ "$(printf '%s\n' "$installed_packer_version" "$PackerVersion" | sort -V | 
     brew install hashicorp/tap/packer
     brew upgrade hashicorp/tap/packer
   else
-    curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-    sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" -y
-    sudo apt-get update && sudo apt-get install packer -y
+    OS=$(detect_os)
+    if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+      sudo pacman -Syu packer --noconfirm --overwrite '/usr/bin/packer'
+    else
+      curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+      sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main" -y
+      sudo apt-get update && sudo apt-get install packer -y
+    fi
 
-    # Check if the apt install failed or the version is still incorrect
+    # Check if the install failed or the version is still incorrect
     installed_packer_version=$(packer version 2>/dev/null | cut -d ' ' -f 2 | cut -d v -f2-)
     if [[ "$(printf '%s\n' "$installed_packer_version" "$PackerVersion" | sort -V | head -n 1)" != "$PackerVersion" ]]; then
       echo -e "${Yellow}Failed to install Packer via package manager or verion version is still lower than the recommended version in ~/.axiom/interact/includes/vars.sh${Color_Off}"
@@ -94,15 +99,7 @@ fi
             wget https://github.com/digitalocean/doctl/releases/download/v${DoctlVersion}/doctl-${DoctlVersion}-darwin-amd64.tar.gz -qO- | tar -xzv -C /usr/local/bin/
             echo "doctl updated to version $DoctlVersion."
     elif [[ $BASEOS == "Linux" ]]; then
-        if uname -a | grep -qi "Microsoft"; then
-            OS="UbuntuWSL"
-        else
-            OS=$(lsb_release -i | awk '{ print $3 }')
-            if ! command -v lsb_release &> /dev/null; then
-                OS="unknown-Linux"
-                BASEOS="Linux"
-            fi
-        fi
+        OS=$(detect_os)
         if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
             sudo pacman -Syu doctl --noconfirm
         elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
@@ -200,31 +197,17 @@ if [[ "$provider" == "ibm-classic" ]] || [[ "$provider" == "ibm-vpc" ]] || [[ "$
              ibmcloud plugin install vpc-infrastructure -q -f
            fi
         elif [[ $BASEOS == "Linux" ]]; then
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
+            OS=$(detect_os)
+            if ! [ -x "$(command -v ibmcloud)" ]; then
+                echo -e "${BGreen}Installing ibmcloud-cli on Linux...${Color_Off}"
+                curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
             fi
-            if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
-                echo "Needs Conversation for Arch or ManjaroLinux"
-            elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
-                if ! [ -x "$(command -v ibmcloud)" ]; then
-                    echo -e "${BGreen}Installing ibmcloud-cli on Linux...${Color_Off}"
-                    curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
-                fi
             if [[ $provider == "ibm-classic" ]]; then
              echo -e "${BGreen}Installing ibmcloud sl (SoftLayer) plugin...${Color_Off}"
              ibmcloud plugin install sl -q -f
             else
              echo -e "${BGreen}Installing ibmcloud vpc plugin...${Color_Off}"
              ibmcloud plugin install vpc-infrastructure -q -f
-            fi
-            elif [[ $OS == "Fedora" ]]; then
-                echo "Needs Conversation for Fedora"
             fi
         fi
 
@@ -270,47 +253,43 @@ if [[ "$provider" == "azure" ]]; then
 
         # Handle Linux installation/update
         elif [[ $BASEOS == "Linux" ]]; then
-            sudo apt-get update -qq
-            sudo apt-get install ca-certificates curl apt-transport-https lsb-release gnupg -y -qq
+            OS=$(detect_os)
 
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
+            if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+                echo -e "${BGreen}Installing Azure CLI via pip on Arch...${Color_Off}"
+                pip install azure-cli
+            elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+                sudo apt-get update -qq
+                sudo apt-get install ca-certificates curl apt-transport-https lsb-release gnupg -y -qq
+
+                AZ_REPO=$(lsb_release -cs)
+                if [[ $AZ_REPO == "kali-rolling" ]]; then
+                    check_version=$(cat /proc/version | awk '{ print $6 $7 }' | tr -d '()' | cut -d . -f 1)
+                    case $check_version in
+                        Debian10)
+                            AZ_REPO="buster"
+                            ;;
+                        Debian11)
+                            AZ_REPO="bullseye"
+                            ;;
+                        Debian12)
+                            AZ_REPO="bookworm"
+                            ;;
+                        *)
+                            echo "Unknown Debian version. Exiting."
+                            exit 1
+                            ;;
+                    esac
                 fi
+                curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+                echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
+
+                sudo apt-get update -qq
+                sudo apt-get purge azure-cli -y -qq
+                sudo apt-get install azure-cli -y -qq
+            elif [[ $OS == "Fedora" ]]; then
+                echo "Needs Conversation for Fedora"
             fi
-
-            AZ_REPO=$(lsb_release -cs)
-            if [[ $AZ_REPO == "kali-rolling" ]]; then
-                check_version=$(cat /proc/version | awk '{ print $6 $7 }' | tr -d '()' | cut -d . -f 1)
-                case $check_version in
-                    Debian10)
-                        AZ_REPO="buster"
-                        ;;
-                    Debian11)
-                        AZ_REPO="bullseye"
-                        ;;
-                    Debian12)
-                        AZ_REPO="bookworm"
-                        ;;
-                    *)
-                        echo "Unknown Debian version. Exiting."
-                        exit 1
-                        ;;
-                esac
-            fi
-            curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
-            echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
-
-            sudo apt-get update -qq
-            sudo apt-get purge azure-cli -y -qq
-            sudo apt-get install azure-cli -y -qq
-
-        elif [[ $OS == "Fedora" ]]; then
-            echo "Needs Conversation for Fedora"
         fi
   fi 
  # Authenticate using client credentials stored in axiom.json
@@ -356,18 +335,10 @@ if [[ "$provider" == "aws" ]]; then
             rm AWSCLIV2.pkg
 
         elif [[ $BASEOS == "Linux" ]]; then
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
-            fi
+            OS=$(detect_os)
 
             # Install AWS CLI based on specific Linux distribution
-            if [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+            if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]] || [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
                 echo -e "${BGreen}Installing/Updating AWS CLI on $OS...${Color_Off}"
                 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
                 cd /tmp
@@ -437,21 +408,20 @@ if [[ "$provider" == "gcp" ]]; then
             curl https://sdk.cloud.google.com | bash
             exec -l $SHELL
         elif [[ $BASEOS == "Linux" ]]; then
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
-            fi
+            OS=$(detect_os)
 
             echo -e "${BGreen}Installing/Updating gcloud CLI on Linux...${Color_Off}"
-            echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-            sudo apt-get install apt-transport-https ca-certificates gnupg -y -qq
-            curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo tee /usr/share/keyrings/cloud.google.gpg > /dev/null
-            sudo apt-get update -qq && sudo apt-get install google-cloud-sdk -y -qq
+            if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+                curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
+                tar -xf google-cloud-cli-linux-x86_64.tar.gz -C "$HOME"
+                "$HOME"/google-cloud-sdk/install.sh --quiet
+                rm google-cloud-cli-linux-x86_64.tar.gz
+            else
+                echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+                sudo apt-get install apt-transport-https ca-certificates gnupg -y -qq
+                curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo tee /usr/share/keyrings/cloud.google.gpg > /dev/null
+                sudo apt-get update -qq && sudo apt-get install google-cloud-sdk -y -qq
+            fi
         fi
     fi
 
@@ -501,15 +471,7 @@ if [[ "$provider" == "hetzner" ]]; then
 
         # Handle Linux installation/update
         elif [[ $BASEOS == "Linux" ]]; then
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
-            fi
+            OS=$(detect_os)
 
             # Install or update hcloud on different Linux distributions
             if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
@@ -568,15 +530,7 @@ if [[ "$provider" == "scaleway" ]]; then
 
         # Handle Linux installation/update
         elif [[ $BASEOS == "Linux" ]]; then
-            if uname -a | grep -qi "Microsoft"; then
-                OS="UbuntuWSL"
-            else
-                OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-                if ! command -v lsb_release &> /dev/null; then
-                    OS="unknown-Linux"
-                    BASEOS="Linux"
-                fi
-            fi
+            OS=$(detect_os)
 
             # Install or update scaleway-cli on different Linux distributions
             if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
@@ -635,15 +589,7 @@ if [[ "$provider" == "exoscale" ]]; then
     		brew install exoscale-cli
 
     	elif [[ $BASEOS == "Linux" ]]; then
-    		if uname -a | grep -qi "Microsoft"; then
-    			OS="UbuntuWSL"
-    		else
-    			OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-    			if ! command -v lsb_release &> /dev/null; then
-    				OS="unknown-Linux"
-    				BASEOS="Linux"
-    			fi
-    		fi
+    		OS=$(detect_os)
 
             if [[ $OS == "Fedora" ]] || [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
     			echo -e "${BGreen}Installing/Updating exo CLI on $OS...${Color_Off}"

@@ -44,18 +44,10 @@ if [[ "$(printf '%s\n' "$installed_version" "$AWSCliVersion" | sort -V | head -n
         rm AWSCLIV2.pkg
 
     elif [[ $BASEOS == "Linux" ]]; then
-        if uname -a | grep -qi "Microsoft"; then
-            OS="UbuntuWSL"
-        else
-            OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-            if ! command -v lsb_release &> /dev/null; then
-                OS="unknown-Linux"
-                BASEOS="Linux"
-            fi
-        fi
+        OS=$(detect_os)
 
         # Install AWS CLI based on specific Linux distribution
-        if [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+        if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]] || [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
             echo -e "${BGreen}Installing/Updating AWS CLI on $OS...${Color_Off}"
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
             cd /tmp

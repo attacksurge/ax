@@ -45,6 +45,52 @@ export ExoscaleCliVersion="1.84.0"
 # Auto Update Option
 [ -f $AXIOM_PATH/interact/includes/.auto_update ] && source $AXIOM_PATH/interact/includes/.auto_update
 
+# Detect Linux distribution, works with or without lsb_release
+# Uses /etc/os-release as fallback, with ID_LIKE for derivatives (CachyOS, EndeavourOS, Garuda, etc.)
+detect_os() {
+    if uname -a | grep -qi "Microsoft"; then
+        echo "UbuntuWSL"
+        return
+    fi
+    local os
+    os=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
+    # Normalize known distro names from lsb_release
+    case "$os" in
+        Arch)          echo "Arch" ; return ;;
+        ManjaroLinux)  echo "ManjaroLinux" ; return ;;
+        Ubuntu)        echo "Ubuntu" ; return ;;
+        Debian)        echo "Debian" ; return ;;
+        Kali)          echo "Kali" ; return ;;
+        Linuxmint)     echo "Linuxmint" ; return ;;
+        Parrot)        echo "Parrot" ; return ;;
+        Fedora)        echo "Fedora" ; return ;;
+    esac
+    # lsb_release returned unknown or empty value, try /etc/os-release
+    if [[ -f /etc/os-release ]]; then
+        os=$(. /etc/os-release && echo "$ID")
+        case "$os" in
+            arch)       echo "Arch" ; return ;;
+            manjaro)    echo "ManjaroLinux" ; return ;;
+            ubuntu)     echo "Ubuntu" ; return ;;
+            debian)     echo "Debian" ; return ;;
+            kali)       echo "Kali" ; return ;;
+            linuxmint)  echo "Linuxmint" ; return ;;
+            parrot)     echo "Parrot" ; return ;;
+            fedora)     echo "Fedora" ; return ;;
+        esac
+        # Check ID_LIKE for derivatives (e.g. CachyOS, EndeavourOS, Garuda have ID_LIKE=arch)
+        local id_like
+        id_like=$(. /etc/os-release && echo "$ID_LIKE")
+        case "$id_like" in
+            arch|arch*) echo "Arch" ; return ;;
+            debian*)    echo "Debian" ; return ;;
+            ubuntu*)    echo "Ubuntu" ; return ;;
+            fedora*)    echo "Fedora" ; return ;;
+        esac
+    fi
+    echo "unknown-Linux"
+}
+
 # Shared function across all proviers, since these functions only query an ssh configuration file
 # check if instance name is in .sshconfig
 # used by axiom-scan

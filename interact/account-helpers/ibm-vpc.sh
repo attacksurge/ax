@@ -51,23 +51,9 @@ if [[ "$(printf '%s\n' "$installed_version" "$IBMCloudCliVersion" | sort -V | he
         echo -e "${BGreen}Installing ibmcloud-cli...${Color_Off}"
         curl -fsSL https://clis.cloud.ibm.com/install/osx | sh
     elif [[ $BASEOS == "Linux" ]]; then
-        if uname -a | grep -qi "Microsoft"; then
-            OS="UbuntuWSL"
-        else
-            OS=$(lsb_release -i | awk '{ print $3 }')
-            if ! command -v lsb_release &> /dev/null; then
-                OS="unknown-Linux"
-                BASEOS="Linux"
-            fi
-        fi
-        if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
-            echo "Needs Conversation for Arch or ManjaroLinux"
-        elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
-            echo -e "${BGreen}Installing ibmcloud-cli on Linux...${Color_Off}"
-            curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
-        elif [[ $OS == "Fedora" ]]; then
-            echo "Needs Conversation for Fedora"
-        fi
+        OS=$(detect_os)
+        echo -e "${BGreen}Installing ibmcloud-cli on Linux...${Color_Off}"
+        curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
     fi
 
     echo "ibmcloud-cli updated to version $IBMCloudCliVersion."

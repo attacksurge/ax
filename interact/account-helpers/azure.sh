@@ -63,47 +63,43 @@ if [[ "$(printf '%s\n' "$installed_version" "$AzureCliVersion" | sort -V | head 
     # Handle Linux installation/update
     elif [[ $BASEOS == "Linux" ]]; then
         echo -e "${BGreen}Installing Azure CLI (az)...${Color_Off}"
-        sudo apt-get update -qq
-        sudo apt-get install ca-certificates curl apt-transport-https lsb-release gnupg -y -qq
+        OS=$(detect_os)
 
-        if uname -a | grep -qi "Microsoft"; then
-            OS="UbuntuWSL"
-        else
-            OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-            if ! command -v lsb_release &> /dev/null; then
-                OS="unknown-Linux"
-                BASEOS="Linux"
+        if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+            echo -e "${BGreen}Installing Azure CLI via pip on Arch...${Color_Off}"
+            pip install azure-cli
+        elif [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
+            sudo apt-get update -qq
+            sudo apt-get install ca-certificates curl apt-transport-https lsb-release gnupg -y -qq
+
+            AZ_REPO=$(lsb_release -cs)
+            if [[ $AZ_REPO == "kali-rolling" ]]; then
+                check_version=$(cat /proc/version | awk '{ print $6 $7 }' | tr -d '()' | cut -d . -f 1)
+                case $check_version in
+                    Debian10)
+                        AZ_REPO="buster"
+                        ;;
+                    Debian11)
+                        AZ_REPO="bullseye"
+                        ;;
+                    Debian12)
+                        AZ_REPO="bookworm"
+                        ;;
+                    *)
+                        echo "Unknown Debian version. Exiting."
+                        exit 1
+                        ;;
+                esac
             fi
+
+            curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+            echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
+
+            sudo apt-get update -qq
+            sudo apt-get install azure-cli -y -qq
+        elif [[ $OS == "Fedora" ]]; then
+            echo "Needs Conversation for Fedora"
         fi
-
-        AZ_REPO=$(lsb_release -cs)
-        if [[ $AZ_REPO == "kali-rolling" ]]; then
-            check_version=$(cat /proc/version | awk '{ print $6 $7 }' | tr -d '()' | cut -d . -f 1)
-            case $check_version in
-                Debian10)
-                    AZ_REPO="buster"
-                    ;;
-                Debian11)
-                    AZ_REPO="bullseye"
-                    ;;
-                Debian12)
-                    AZ_REPO="bookworm"
-                    ;;
-                *)
-                    echo "Unknown Debian version. Exiting."
-                    exit 1
-                    ;;
-            esac
-        fi
-
-        curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
-        echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | sudo tee /etc/apt/sources.list.d/azure-cli.list
-
-        sudo apt-get update -qq
-        sudo apt-get install azure-cli -y -qq
-
-    elif [[ $OS == "Fedora" ]]; then
-        echo "Needs Conversation for Fedora"
     fi
 
     echo "Azure CLI updated to version $AzureCliVersion."

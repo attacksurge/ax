@@ -87,21 +87,30 @@ if [[ "$(printf '%s\n' "$installed_version" "$GCloudCliVersion" | sort -V | head
     echo -e "${Yellow}gcloud CLI is either not installed or version is lower than the recommended version in ~/.axiom/interact/includes/vars.sh${Color_Off}"
     echo "Installing/updating gcloud CLI to version $GCloudCliVersion..."
 
-    sudo apt update && sudo apt-get install apt-transport-https ca-certificates gnupg curl -qq -y
-    # Add the Google Cloud GPG key and fix missing GPG key issue
-    echo "Adding the Google Cloud public key..."
-    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+    OS=$(detect_os)
+    if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then
+        echo -e "${BGreen}Installing gcloud CLI via standalone archive on Arch...${Color_Off}"
+        curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
+        tar -xf google-cloud-cli-linux-x86_64.tar.gz -C "$HOME"
+        "$HOME"/google-cloud-sdk/install.sh --quiet
+        rm google-cloud-cli-linux-x86_64.tar.gz
+    else
+        sudo apt update && sudo apt-get install apt-transport-https ca-certificates gnupg curl -qq -y
+        # Add the Google Cloud GPG key and fix missing GPG key issue
+        echo "Adding the Google Cloud public key..."
+        curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
 
-    # Add the correct repository entry for Google Cloud SDK
-    echo "Adding Google Cloud SDK to sources list..."
-    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+        # Add the correct repository entry for Google Cloud SDK
+        echo "Adding Google Cloud SDK to sources list..."
+        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
 
-    # Clean up duplicate entries
-    clean_gcloud_repos
+        # Clean up duplicate entries
+        clean_gcloud_repos
 
-    # Update package list and install Google Cloud SDK
-    sudo apt-get update -qq
-    sudo apt-get install google-cloud-sdk -y -qq
+        # Update package list and install Google Cloud SDK
+        sudo apt-get update -qq
+        sudo apt-get install google-cloud-sdk -y -qq
+    fi
     echo "Installing Packer Plugin..."
     packer plugins install github.com/hashicorp/googlecompute
 fi

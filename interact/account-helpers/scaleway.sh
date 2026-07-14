@@ -62,14 +62,7 @@ if [[ "$(printf '%s\n' "$installed_version" "$ScalewayCliVersion" | sort -V | he
         echo -e "${BGreen}Installing Scaleway CLI (scw)...${Color_Off}"
         brew install scw
     elif [[ $BASEOS == "Linux" ]]; then
-        if uname -a | grep -qi "Microsoft"; then
-            OS="UbuntuWSL"
-        else
-            OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-            if ! command -v lsb_release &> /dev/null; then
-                OS="unknown-Linux"
-            fi
-        fi
+        OS=$(detect_os)
 
         # Install or update Scaleway CLI for Linux
         if [[ $OS == "Arch" ]] || [[ $OS == "ManjaroLinux" ]]; then

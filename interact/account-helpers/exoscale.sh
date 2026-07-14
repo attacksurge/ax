@@ -88,15 +88,7 @@ if [[ "$(printf '%s\n' "$installed_version" "$ExoscaleCliVersion" | sort -V | he
 		brew install exoscale-cli
 	
 	elif [[ $BASEOS == "Linux" ]]; then
-		if uname -a | grep -qi "Microsoft"; then
-			OS="UbuntuWSL"
-		else
-			OS=$(lsb_release -i 2>/dev/null | awk '{ print $3 }')
-			if ! command -v lsb_release &> /dev/null; then
-				OS="unknown-Linux"
-				BASEOS="Linux"
-			fi
-		fi
+		OS=$(detect_os)
 
         if [[ $OS == "Fedora" ]] || [[ $OS == "Ubuntu" ]] || [[ $OS == "Debian" ]] || [[ $OS == "Linuxmint" ]] || [[ $OS == "Parrot" ]] || [[ $OS == "Kali" ]] || [[ $OS == "unknown-Linux" ]] || [[ $OS == "UbuntuWSL" ]]; then
 			echo -e "${BGreen}Installing/Updating exo CLI on $OS...${Color_Off}"
