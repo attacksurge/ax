@@ -69,6 +69,39 @@ manage_auto_update() {
 ###########################################################################################################
 # Shell setup functions
 #
+function append_shell(){
+    echo -e "${Green}Appending Ax to your current shell config (no backup/replace)...${Color_Off}"
+    # Detect current shell config file
+    if [[ "$SHELL" == *"zsh"* ]] || [[ -f "$HOME/.zshrc" ]]; then
+        rcfile="$HOME/.zshrc"
+        shell_name="zsh"
+    else
+        rcfile="$HOME/.bashrc"
+        shell_name="bash"
+    fi
+
+    # Add PATH if not already present
+    if ! grep -q '\.axiom/interact' "$rcfile" 2>/dev/null; then
+        echo "export PATH=\"\$PATH:\$HOME/.local/bin:\$HOME/.axiom/interact\"" >> "$rcfile"
+        echo -e "${BGreen}Added Ax to \$PATH in $rcfile${Color_Off}"
+    else
+        echo -e "${BGreen}Ax PATH already present in $rcfile${Color_Off}"
+    fi
+
+    # Add completion if not already present
+    if ! grep -q 'ax-completion.sh' "$rcfile" 2>/dev/null; then
+        if [[ "$shell_name" == "zsh" ]]; then
+            echo "autoload -Uz bashcompinit && bashcompinit" >> "$rcfile"
+        fi
+        echo "source \$HOME/.axiom/interact/includes/ax-completion.sh" >> "$rcfile"
+        echo -e "${BGreen}Added Ax completion to $rcfile${Color_Off}"
+    else
+        echo -e "${BGreen}Ax completion already present in $rcfile${Color_Off}"
+    fi
+
+    source "$rcfile" >> /dev/null 2>&1
+}
+
 function bash_shell(){
     timestamp=$(date +%Y-%m-%d_%H-%M-%S)
     echo -e "${BGreen}Backing up $(echo "$HOME"/.bashrc) to $(echo "$HOME"/.bashrc-$timestamp) just in case.${Color_Off}"
@@ -581,13 +614,16 @@ elif [[ $usershell == "bash" ]]|| [[ $usershell == "Bash" ]] || [[ $usershell ==
 bash_shell
 elif [[ $usershell == "zsh" ]]|| [[ $usershell == "Zsh" ]] || [[ $usershell == "ZSH" ]] ; then
 zsh_shell
+elif [[ $usershell == "append" ]] || [[ $usershell == "Append" ]] || [[ $usershell == "append-only" ]] ; then
+append_shell
 else
 
 # Pick your shell
 echo -e "${BGreen}Choose bash/zsh to add Ax to .bashrc/.zshrc. OMZ installs Oh My Zsh and replaces .zshrc and .oh-my-zsh"
+echo -e "Append Only will only add the required Ax lines to your existing shell config without modifying anything else"
 echo -e "${BGreen}Whatever option you choose, we backup your config to ~/.\$shell-\$timestamp just in case${Color_Off}"
  PS3="Please select an option : "
-  choices=("Bash" "Zsh" 'Oh My Zsh')
+  choices=("Bash" "Zsh" 'Oh My Zsh' 'Append Only')
   select choice in "${choices[@]}"; do
    case $choice in
    Bash)
@@ -600,6 +636,10 @@ echo -e "${BGreen}Whatever option you choose, we backup your config to ~/.\$shel
    ;;
   'Oh My Zsh')
    omz_shell
+  break
+   ;;
+  'Append Only')
+   append_shell
   break
    ;;
 esac
