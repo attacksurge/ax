@@ -1,0 +1,15 @@
+- command: fallocate -l 2G /swap
+  args:
+    creates: /swap
+
+- file:
+    path: /swap
+    mode: '0600'
+
+- command: mkswap /swap
+
+- command: swapon /swap
+
+- lineinfile:
+    path: /etc/fstab
+    line: '/swap none swap sw 0 0'

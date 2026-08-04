@@ -1,0 +1,8 @@
+---
+- name: AX Barebones Image
+  hosts: all
+  become: yes
+  vars_files:
+    - ../vars/barebones.yml
+  roles:
+    - common
