@@ -37,12 +37,13 @@
       "echo 'root:${var.op_random_password}' | chpasswd",
 
       "echo 'Moving Config files'",
-      "mv /tmp/configs/sudoers /etc/sudoers",
-      "pkexec chown root:root /etc/sudoers /etc/sudoers.d -R",
+      "install -o root -g root -m 0440 /tmp/configs/sudoers /etc/sudoers",
+      "chown -R root:root /etc/sudoers.d",
       "mv /tmp/configs/bashrc /home/op/.bashrc",
       "mv /tmp/configs/zshrc /home/op/.zshrc",
       "mv /tmp/configs/sshd_config /etc/ssh/sshd_config",
       "mv /tmp/configs/00-header /etc/update-motd.d/00-header",
+      "chown root:root /etc/ssh/sshd_config /etc/update-motd.d/00-header",
       "mv /tmp/configs/authorized_keys /home/op/.ssh/authorized_keys",
       "mv /tmp/configs/tmux-splash.sh /home/op/bin/tmux-splash.sh",
       "/bin/su -l op -c 'sudo chmod 600 /home/op/.ssh/authorized_keys'",
@@ -59,7 +60,7 @@
       "sudo usermod -aG docker op",
 
       "echo 'Installing Interlace'",
-      "git clone https://github.com/codingo/Interlace.git /home/op/recon/interlace && cd /home/op/recon/interlace/ && python3 setup.py install",
+      "git clone https://github.com/codingo/Interlace.git /home/op/recon/interlace && python3 -m venv /opt/interlace && /opt/interlace/bin/pip install /home/op/recon/interlace && ln -sf /opt/interlace/bin/interlace /usr/local/bin/interlace",
 
       "echo 'Optimizing SSH Connections'",
       "/bin/su -l root -c 'echo \"ClientAliveInterval 60\" | sudo tee -a /etc/ssh/sshd_config'",
@@ -213,6 +214,6 @@
       "chown -R op:users /home/op",
       "chown root:root /etc/sudoers /etc/sudoers.d -R"
     ]
-    inline_shebang = "/bin/sh -x"
+    inline_shebang = "/bin/sh -ex"
   }
 }
