@@ -16,8 +16,8 @@
       "sudo apt update -qq",
       "DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew dist-upgrade -qq",
 
-      "echo 'Installing ufw fail2ban net-tools zsh jq build-essential python3-pip unzip git p7zip libpcap-dev rubygems ruby-dev grc'",
-      "sudo apt install fail2ban ufw net-tools zsh zsh-syntax-highlighting zsh-autosuggestions jq build-essential python3-pip unzip git p7zip libpcap-dev rubygems ruby-dev grc -y -qq",
+      "echo 'Installing ufw fail2ban net-tools zsh jq build-essential python3-pip python3-venv unzip git p7zip libpcap-dev rubygems ruby-dev grc'",
+      "sudo apt install fail2ban ufw net-tools zsh zsh-syntax-highlighting zsh-autosuggestions jq build-essential python3-pip python3-venv unzip git p7zip libpcap-dev rubygems ruby-dev grc -y -qq",
 
       "ufw allow 22",
       "ufw allow 2266",
@@ -119,7 +119,7 @@
       "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/hahwul/dalfox/v2@latest'",
 
       "echo 'Installing dnsvalidator'",
-      "git clone https://github.com/vortexau/dnsvalidator.git /home/op/recon/dnsvalidator && cd /home/op/recon/dnsvalidator/ && sudo python3 setup.py install",
+      "git clone https://github.com/vortexau/dnsvalidator.git /home/op/recon/dnsvalidator && python3 -m venv /opt/dnsvalidator && /opt/dnsvalidator/bin/pip install /home/op/recon/dnsvalidator && ln -sf /opt/dnsvalidator/bin/dnsvalidator /usr/local/bin/dnsvalidator",
 
       "echo 'Installing dnsx'",
       "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest'",
@@ -201,7 +201,7 @@
       "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/trufflehog/Dockerfile -t axiom/trufflehog'",
 
       "echo 'Installing wafw00f'",
-      "cd /tmp && git clone https://github.com/EnableSecurity/wafw00f && cd wafw00f && sudo python3 setup.py install",
+      "git clone https://github.com/EnableSecurity/wafw00f /tmp/wafw00f && python3 -m venv /opt/wafw00f && /opt/wafw00f/bin/pip install /tmp/wafw00f && ln -sf /opt/wafw00f/bin/wafw00f /usr/local/bin/wafw00f",
 
       "echo 'Removing unneeded Docker images'",
       "/bin/su -l op -c 'docker image prune -f'",

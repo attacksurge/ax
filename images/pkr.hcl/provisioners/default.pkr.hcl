@@ -16,8 +16,8 @@
         "sudo apt update -qq",
         "DEBIAN_FRONTEND=noninteractive apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confnew dist-upgrade -qq",
 
-        "echo 'Installing fail2ban ufw net-tools zsh zsh-syntax-highlighting zsh-autosuggestions jq build-essential python3-pip unzip git p7zip libpcap-dev rubygems ruby-dev grc'",
-        "sudo apt install fail2ban ufw net-tools zsh zsh-syntax-highlighting zsh-autosuggestions jq build-essential python3-pip unzip git p7zip libpcap-dev rubygems ruby-dev grc -y -qq",
+        "echo 'Installing fail2ban ufw net-tools zsh zsh-syntax-highlighting zsh-autosuggestions jq build-essential python3-pip python3-venv unzip git p7zip libpcap-dev rubygems ruby-dev grc'",
+        "sudo apt install fail2ban ufw net-tools zsh zsh-syntax-highlighting zsh-autosuggestions jq build-essential python3-pip python3-venv unzip git p7zip libpcap-dev rubygems ruby-dev grc -y -qq",
         "ufw allow 22",
         "ufw allow 2266",
         "ufw --force enable",
@@ -121,7 +121,7 @@
         "/bin/su -l op -c 'docker image build - < /home/op/lists/axiom-dockerfiles/dnsrecon/Dockerfile -t axiom/dnsrecon'",
 
         "echo 'Installing dnsvalidator'",
-        "git clone https://github.com/vortexau/dnsvalidator.git /home/op/recon/dnsvalidator && cd /home/op/recon/dnsvalidator/ && sudo python3 setup.py install",
+        "git clone https://github.com/vortexau/dnsvalidator.git /home/op/recon/dnsvalidator && python3 -m venv /opt/dnsvalidator && /opt/dnsvalidator/bin/pip install /home/op/recon/dnsvalidator && ln -sf /opt/dnsvalidator/bin/dnsvalidator /usr/local/bin/dnsvalidator",
 
         "echo 'Installing dnsx'",
         "/bin/su -l op -c 'GO111MODULE=on /usr/local/go/bin/go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest'",
@@ -236,7 +236,7 @@
         "/bin/su -l op -c '/usr/local/go/bin/go install github.com/tomnomnom/waybackurls@latest'",
 
         "echo 'Installing webscreenshot'",
-        "/bin/su -l op -c 'pip3 install webscreenshot'",
+        "python3 -m venv /opt/webscreenshot && /opt/webscreenshot/bin/pip install webscreenshot && ln -sf /opt/webscreenshot/bin/webscreenshot /usr/local/bin/webscreenshot",
 
         "echo 'Removing unneeded Docker images'",
         "/bin/su -l op -c 'docker image prune -f'",
