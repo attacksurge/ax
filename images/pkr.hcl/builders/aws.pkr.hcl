@@ -16,7 +16,7 @@ variable "snapshot_name" {
 
 variable "default_disk_size" {
   type    = number
-  default = 20
+  default = 50
 }
 
 source "amazon-ebs" "packer" {

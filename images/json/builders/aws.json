@@ -1,6 +1,6 @@
 {
   "variables": {
-    "default_disk_size": "20"
+    "default_disk_size": "50"
   },
   "builders": [
     {

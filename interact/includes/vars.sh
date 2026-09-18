@@ -27,7 +27,7 @@ export BCyan='\033[1;36m'        # Cyan
 export BWhite='\033[1;37m'       # White
 
 # Required Go Version - gets interpolated during axiom-build and axiom-configure
-export GolangVersion='1.23.0'
+export GolangVersion='1.25.0'
 
 # Recommended Cloud provider CLI versions
 # Only updates if the installed version is lower than recommended version
