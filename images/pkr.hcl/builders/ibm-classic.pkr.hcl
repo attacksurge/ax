@@ -19,7 +19,7 @@ source "ibmcloud-classic" "packer" {
   api_key                = var.sl_key
   username               = var.username
   datacenter_name        = var.region
-  base_os_code           = "UBUNTU_22_64"
+  base_os_code           = "UBUNTU_24_64"
   image_name             = var.snapshot_name
   instance_name          = "packer-${timestamp()}"
   image_description      = "Axiom full image built at ${timestamp()}"

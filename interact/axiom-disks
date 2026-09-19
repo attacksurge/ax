@@ -7,7 +7,7 @@ source "$AXIOM_PATH/interact/includes/system-notification.sh"
 
 # Centralized disk defaults
 DEFAULT_DISK_AWS=50
-DEFAULT_DISK_GCP=20
+DEFAULT_DISK_GCP=50
 DEFAULT_DISK_SCALEWAY=50
 DEFAULT_DISK_EXOSCALE=50
 DEFAULT_DISK_IBM=100

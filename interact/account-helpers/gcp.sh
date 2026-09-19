@@ -261,13 +261,13 @@ function gcp_setup() {
     fi
 
     # Prompt for default disk size
-    echo -e -n "${Green}Please enter your default disk size in GB (10–65536) (you can always change this later with axiom-disks select \$size): Default '20', press enter \n>> ${Color_Off}"
+    echo -e -n "${Green}Please enter your default disk size in GB (10-65536) (you can always change this later with axiom-disks select \$size): Default '50', press enter \n>> ${Color_Off}"
     read disk_size
 
     # Validate or set default
     if [[ -z "$disk_size" ]]; then
-        disk_size="20"
-        echo -e "${Blue}Selected default option '20GB'${Color_Off}"
+        disk_size="50"
+        echo -e "${Blue}Selected default option '50GB'${Color_Off}"
     fi
 
     # Check if disk_size is a valid number and in range
